@@ -15,6 +15,11 @@ public class EnemyAI : NetworkBehaviour
     [Header("Targets")]
     [SerializeField] private LayerMask targetLayers; // Player ve Unit layer'ları
 
+    [Header("Ranged Settings")]
+    [SerializeField] private bool isRanged = false;
+    [SerializeField] private GameObject projectilePrefab;
+    [SerializeField] private Transform projectileSpawnPoint;
+
     [Header("Visuals")]
     [SerializeField] private Animator animator;
     [SerializeField] private NetworkAnimator networkAnimator;
@@ -63,12 +68,31 @@ public class EnemyAI : NetworkBehaviour
             }
         }
 
-        // 4. Hedefe hasar ver
-        IDamageable damageable = currentTarget.GetComponent<IDamageable>();
-        if (damageable != null)
+        // 4. Saldırı (Melee vs Ranged)
+        if (isRanged)
         {
-            damageable.TakeDamage(damage);
-            OnAttack?.Invoke();
+            StartCoroutine(SpawnProjectileDelayed(0.4f)); 
+        }
+        else
+        {
+            // Hedefe hasar ver (Melee)
+            IDamageable damageable = currentTarget.GetComponent<IDamageable>();
+            if (damageable != null)
+            {
+                damageable.TakeDamage(damage);
+                OnAttack?.Invoke();
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator SpawnProjectileDelayed(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (projectilePrefab != null && projectileSpawnPoint != null)
+        {
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, transform.rotation);
+            NetworkServer.Spawn(proj);
         }
     }
 
@@ -180,7 +204,7 @@ public class EnemyAI : NetworkBehaviour
     // Gizmos ile Aggro alanını çiz (Debug için)
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.red;
+        Gizmos.color = isRanged ? Color.cyan : Color.red;
         Gizmos.DrawWireSphere(transform.position, aggroRange);
     }
 }

@@ -387,8 +387,8 @@ MonoBehaviour:
   spawnConfigs:
   - name: Tier12
     spawnPoint: {fileID: 1920908601256535711, guid: abbf4413b9c01b74c8864a3b56e4ed37, type: 3}
-    enemyPrefab: {fileID: 769359131696096673, guid: 7ea37ba717b7c644aab79b8288f25315, type: 3}
-    countPerWave: 3
+    enemyPrefab: {fileID: 8277154536518808949, guid: d2fb77fa8ce9ba14985c90d163fadb1a, type: 3}
+    countPerWave: 15
     rows: 3
     waveInterval: 60
     totalWaves: 2
