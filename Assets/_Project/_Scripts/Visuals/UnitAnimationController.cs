@@ -57,7 +57,33 @@ public class UnitAnimationController : NetworkBehaviour
         if (enemyAI != null) enemyAI.OnAttack -= HandleAttack;
     }
 
-    // ... Update Method ...
+    private Vector3 lastPosition;
+
+    private void Start()
+    {
+        lastPosition = transform.position;
+    }
+
+    private void Update()
+    {
+        // Server veya Client fark etmez, hareket hızını pozisyon değişiminden hesapla.
+        // Bu sayede Client'lar NavMeshAgent kullanmasa bile (NetworkTransform ile gelse bile) yürür.
+        if (animator != null)
+        {
+            float moveDistance = Vector3.Distance(transform.position, lastPosition);
+            float currentSpeed = moveDistance / Time.deltaTime;
+            
+            // Yumuşatma (Lerp) - Titremeyi önler
+            float smoothedSpeed = Mathf.Lerp(animator.GetFloat(speedParam), currentSpeed, Time.deltaTime * 10f);
+            
+            // Hassasiyet eşiği (Gürültüyü önle)
+            if (smoothedSpeed < 0.1f) smoothedSpeed = 0f;
+
+            animator.SetFloat(speedParam, smoothedSpeed);
+            
+            lastPosition = transform.position;
+        }
+    }
 
     [SerializeField] private string hitParam = "Hit";
     private int lastKnownHealth = -1;

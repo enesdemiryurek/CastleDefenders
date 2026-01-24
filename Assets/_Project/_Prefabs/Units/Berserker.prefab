@@ -686,6 +686,6 @@ MonoBehaviour:
   detectionRadius: 20
   enemyLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 8
   updateInterval: 0.5
   SquadIndex: 0
