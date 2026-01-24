@@ -9,6 +9,10 @@ public class UnitAttack : NetworkBehaviour
     [SerializeField] private int damage = 15;
     [SerializeField] private float attackCooldown = 1.0f;
     [SerializeField] private LayerMask enemyLayer;
+    [Header("Ranged Settings")]
+    [SerializeField] private bool isRanged = false;
+    [SerializeField] private GameObject projectilePrefab;
+    [SerializeField] private Transform projectileSpawnPoint;
 
     private NavMeshAgent agent;
     private float lastAttackTime;
@@ -38,7 +42,7 @@ public class UnitAttack : NetworkBehaviour
             if (target != null && hit.GetComponent<EnemyAI>() != null)
             {
                 Attack(target);
-                return; // En yakındakine vurup döngüden çık (Hepsine aynı anda vurmasın)
+                return; // En yakındakine vurup döngüden çık
             }
         }
     }
@@ -52,7 +56,6 @@ public class UnitAttack : NetworkBehaviour
         lastAttackTime = Time.time;
         
         // 1. Hedefe Dön (LookAt)
-        // Hedefin pozisyonunu al ama Y eksenini sabitle (yukarı bakmasın)
         if (target is MonoBehaviour targetMono)
         {
             Vector3 lookPos = targetMono.transform.position;
@@ -60,18 +63,39 @@ public class UnitAttack : NetworkBehaviour
             transform.LookAt(lookPos);
         }
 
-        // 2. Durdur (Kayarak vurmasın)
+        // 2. Durdur (Animasyon bitene kadar)
         if (agent != null && agent.enabled)
         {
             agent.isStopped = true;
-            Invoke(nameof(ResumeMovement), 0.75f); // Animasyon bitince yürüsün (tahmini 0.75sn)
+            // Menzilli ise biraz daha hızlı toparlayabilir veya animasyona göre ayarlanır
+            Invoke(nameof(ResumeMovement), 0.75f); 
         }
 
-        // 3. Hasar Ver
-        target.TakeDamage(damage);
-
-        // 4. Event Tetikle (Animasyon için)
+        // 3. Event Tetikle (Animasyon başlasın)
         OnAttack?.Invoke();
+
+        // 4. Saldırı Türüne Göre İşlem (GECİKMELİ)
+        // Animasyonun "Shoot" noktasına gelmesi için azıcık bekleyip oku fırlatalım
+        if (isRanged)
+        {
+            StartCoroutine(SpawnProjectileDelayed(0.4f)); 
+        }
+        else
+        {
+            // Melee için direkt hasar (veya buraya da gecikme eklenebilir)
+            target.TakeDamage(damage);
+        }
+    }
+
+    private System.Collections.IEnumerator SpawnProjectileDelayed(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (projectilePrefab != null && projectileSpawnPoint != null)
+        {
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, transform.rotation);
+            NetworkServer.Spawn(proj);
+        }
     }
 
     private void ResumeMovement()
@@ -84,7 +108,7 @@ public class UnitAttack : NetworkBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = Color.yellow;
+        Gizmos.color = isRanged ? Color.cyan : Color.yellow;
         Gizmos.DrawWireSphere(transform.position, attackRange);
     }
 }
