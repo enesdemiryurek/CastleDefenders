@@ -1,0 +1,103 @@
+using Mirror;
+using UnityEngine;
+using UnityEngine.AI;
+
+[RequireComponent(typeof(NavMeshAgent))]
+public class UnitMovement : NetworkBehaviour
+{
+    [Header("Charge Settings")]
+    [SerializeField] private float detectionRadius = 20f;
+    [SerializeField] private LayerMask enemyLayer;
+    [SerializeField] private float updateInterval = 0.5f;
+
+    private NavMeshAgent agent;
+    private bool isCharging = false;
+    private float lastUpdateTime;
+
+    [SyncVar] public int SquadIndex;
+
+    private void Awake()
+    {
+        agent = GetComponent<NavMeshAgent>();
+    }
+
+    public override void OnStartServer()
+    {
+        // NavMeshAgent sadece Server'da çalışmalı
+        agent.enabled = true;
+        
+        // Askerler hedefe tam sıfır noktasına gitmeye çalışırken titremesin/dönmesin
+        agent.stoppingDistance = 1.5f; 
+        agent.autoBraking = true;
+    }
+
+    [ServerCallback]
+    private void Update()
+    {
+        if (!isCharging) return;
+
+        if (Time.time - lastUpdateTime < updateInterval) return;
+        lastUpdateTime = Time.time;
+
+        Transform target = FindNearestEnemy();
+        if (target != null)
+        {
+            if (agent.isOnNavMesh)
+            {
+                agent.SetDestination(target.position);
+            }
+        }
+    }
+
+    private Transform FindNearestEnemy()
+    {
+        // "Herhangi bir yerdeki" düşmanı bulmak için tüm sahneyi tarıyoruz
+        // Upgrade: Unity 6+ için FindObjectsByType kullanımı
+        EnemyAI[] allEnemies = FindObjectsByType<EnemyAI>(FindObjectsSortMode.None);
+        
+        Transform bestTarget = null;
+        float closestDist = float.MaxValue;
+
+        foreach (var enemy in allEnemies)
+        {
+            float d = Vector3.Distance(transform.position, enemy.transform.position);
+            if (d < closestDist)
+            {
+                closestDist = d;
+                bestTarget = enemy.transform;
+            }
+        }
+        return bestTarget;
+    }
+
+    [Server]
+    public void StartCharging()
+    {
+        isCharging = true;
+        agent.isStopped = false;
+    }
+
+    [Server]
+    public void StopCharging()
+    {
+        isCharging = false;
+        // Hareketi hemen durdurmak istemeyebiliriz (MoveTo çağrılacak), ama clean slate olsun.
+    }
+
+    [Server] // Bu fonksiyon sadece Server'da çalıştırılabilir
+    public void MoveTo(Vector3 targetPosition)
+    {
+        // Hareket emri gelince charge biter
+        StopCharging();
+
+        if (agent.isOnNavMesh)
+        {
+            agent.SetDestination(targetPosition);
+            agent.isStopped = false;
+        }
+        else
+        {
+            Debug.LogWarning($"Unit {name} is NOT on NavMesh!");
+        }
+    }
+}
