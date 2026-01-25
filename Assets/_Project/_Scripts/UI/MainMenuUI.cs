@@ -1,14 +1,19 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro; // Added for TMPro.TMP_InputField
 
 public class MainMenuUI : MonoBehaviour
 {
     [Header("Buttons")]
-    [SerializeField] private Button playButton;
+    [SerializeField] private Button hostButton; // Play -> Host oldu
+    [SerializeField] private Button joinButton; // Yeni Join butonu
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button quitButton;
     [SerializeField] private Button settingsBackButton; // Yeni Geri Tuşu
+
+    [Header("Inputs")]
+    [SerializeField] private TMPro.TMP_InputField ipInputField; // IP Girmek için
 
     [Header("Panels")]
     [SerializeField] private GameObject settingsPanel;
@@ -16,7 +21,8 @@ public class MainMenuUI : MonoBehaviour
     private void Start()
     {
         // Buton dinleyicilerini ayarla
-        playButton.onClick.AddListener(OnPlayClicked);
+        if (hostButton != null) hostButton.onClick.AddListener(OnHostClicked);
+        if (joinButton != null) joinButton.onClick.AddListener(OnJoinClicked);
         settingsButton.onClick.AddListener(OnSettingsClicked);
         quitButton.onClick.AddListener(OnQuitClicked);
         
@@ -32,13 +38,30 @@ public class MainMenuUI : MonoBehaviour
         if (settingsPanel != null) settingsPanel.SetActive(false);
     }
 
-    private void OnPlayClicked()
+    private void OnHostClicked()
     {
-        Debug.Log("Play Clicked - Going to Lobby/Host Screen");
-        // BURASI ÖNEMLİ: Şimdilik direk Lobby sahnesine atmıyoruz çünkü NetworkManager lazım.
-        // İleride buraya "Host / Join" paneli açtıracağız.
-        // Geçici olarak:
-        // SceneManager.LoadScene("Lobby"); 
+        Debug.Log("Host Clicked - Starting Host...");
+        if (Mirror.NetworkManager.singleton != null)
+        {
+            Mirror.NetworkManager.singleton.StartHost();
+        }
+    }
+
+    private void OnJoinClicked()
+    {
+        Debug.Log("Join Clicked - Connecting to Server...");
+        string ipAddress = "localhost";
+        
+        if (ipInputField != null && !string.IsNullOrEmpty(ipInputField.text))
+        {
+            ipAddress = ipInputField.text;
+        }
+
+        if (Mirror.NetworkManager.singleton != null)
+        {
+            Mirror.NetworkManager.singleton.networkAddress = ipAddress;
+            Mirror.NetworkManager.singleton.StartClient();
+        }
     }
 
     private void OnSettingsClicked()
