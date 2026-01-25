@@ -23,8 +23,8 @@ public class Projectile : NetworkBehaviour
     [ServerCallback]
     private void OnTriggerEnter(Collider other)
     {
-        // Kendimize (Unit) veya başka oklara çarpmasın
-        if (other.GetComponent<UnitMovement>() != null || other.GetComponent<Projectile>() != null) return;
+        // Kendimize (Unit / Enemy) veya başka oklara çarpmasın
+        if (other.GetComponent<UnitMovement>() != null || other.GetComponent<EnemyAI>() != null || other.GetComponent<Projectile>() != null) return;
 
         IDamageable target = other.GetComponent<IDamageable>();
         if (target != null)

@@ -93,7 +93,7 @@ public class UnitAttack : NetworkBehaviour
 
         if (projectilePrefab != null && projectileSpawnPoint != null)
         {
-            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, transform.rotation);
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
             NetworkServer.Spawn(proj);
         }
     }

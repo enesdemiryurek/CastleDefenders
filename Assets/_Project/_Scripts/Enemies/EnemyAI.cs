@@ -91,7 +91,8 @@ public class EnemyAI : NetworkBehaviour
 
         if (projectilePrefab != null && projectileSpawnPoint != null)
         {
-            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, transform.rotation);
+            // Oku SpawnPoint'in açısıyla fırlat (Böylece kullanıcı düzeltebilir)
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
             NetworkServer.Spawn(proj);
         }
     }
@@ -129,40 +130,50 @@ public class EnemyAI : NetworkBehaviour
 
     private void FindBestTarget()
     {
+        // 0. Mevcut hedef hala geçerli mi? (Sticky Targeting)
+        // Eğer zaten bir hedefim varsa ve hala canlıysa/menzildeyse değiştirme.
+        // Bu sayede düşmanlar "kararsız" gibi titremez, birine kilitlenir.
+        if (currentTarget != null)
+        {
+            IDamageable currentHp = currentTarget.GetComponent<IDamageable>();
+            float distToCurrent = Vector3.Distance(transform.position, currentTarget.position);
+            
+            // Hedef hala canlıysa ve aşırı uzaklaşmadıysa (Aggro * 1.5) devam et
+            if (currentHp != null && currentHp.CurrentHealth > 0 && distToCurrent < aggroRange * 1.5f)
+            {
+                return;
+            }
+        }
+
         // 1. Etraftaki "Canlıları" ara (Unit veya Player)
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
-        float closestDistance = float.MaxValue;
-        Transform bestCandidate = null;
+        
+        System.Collections.Generic.List<Transform> validTargets = new System.Collections.Generic.List<Transform>();
 
         foreach (var hit in hitColliders)
         {
-            // Kendimize kitlememek için kontrol
             if (hit.transform == transform) continue;
 
-            // ÖNEMLİ: Sadece 'Canlı' olanları hedef al (Player veya Unit)
-            // Eğer Yeri (Ground) veya Duvarı hedef alırsak Enemy olduğu yerde kalır.
-            if (hit.GetComponent<PlayerController>() == null && hit.GetComponent<UnitMovement>() == null)
+            // Unit veya Player kontrolü
+            if (hit.GetComponentInParent<PlayerController>() != null || hit.GetComponentInParent<UnitMovement>() != null)
             {
-                continue;
-            }
-
-            float dist = Vector3.Distance(transform.position, hit.transform.position);
-            if (dist < closestDistance)
-            {
-                closestDistance = dist;
-                bestCandidate = hit.transform;
+                validTargets.Add(hit.transform);
             }
         }
 
-        // 2. Eğer yakında kimse yoksa hedef-> TAHT
-        if (bestCandidate != null)
+        // 2. Hedef Seçimi (Rastgelelik ekle ki hepsi tek kişiye dalmasın)
+        if (validTargets.Count > 0)
         {
-            currentTarget = bestCandidate;
+            // En yakındakini değil, menzildeki rastgele birini seç
+            currentTarget = validTargets[Random.Range(0, validTargets.Count)];
         }
         else
         {
+            // Kimse yoksa hedef-> TAHT
             if (Throne.Instance != null)
                 currentTarget = Throne.Instance.transform;
+            else
+                currentTarget = null;
         }
     }
 
@@ -170,13 +181,37 @@ public class EnemyAI : NetworkBehaviour
     {
         if (currentTarget == null) return;
 
-        // NavMesh üzerinde hareket et
-        if (agent.isOnNavMesh)
+        if (!agent.isOnNavMesh) return;
+
+        float dist = Vector3.Distance(transform.position, currentTarget.position);
+        
+        // --- RANGED MANTIK (Bannerlord Tarzı) ---
+        if (isRanged)
+        {
+            // Eğer saldırı menzilindeysek DUR ve SIK
+            if (dist <= attackRange)
+            {
+                agent.isStopped = true;
+                
+                // Hedefe Dön (LookAt) - Sadece Y ekseninde
+                Vector3 lookPos = currentTarget.position;
+                lookPos.y = transform.position.y;
+                transform.LookAt(lookPos);
+                
+                AttackTarget();
+            }
+            else
+            {
+                // Menzile girene kadar koş
+                agent.isStopped = false;
+                agent.SetDestination(currentTarget.position);
+            }
+        }
+        // --- MELEE MANTIK (Klasik) ---
+        else
         {
             agent.SetDestination(currentTarget.position);
-            
-            // Saldırı Mesafesinde miyiz?
-            float dist = Vector3.Distance(transform.position, currentTarget.position);
+
             if (dist <= attackRange)
             {
                 agent.isStopped = true;

@@ -9,6 +9,8 @@ public class Health : NetworkBehaviour, IDamageable
     [SyncVar(hook = nameof(HandleHealthChanged))]
     private int currentHealth;
 
+    public int CurrentHealth => currentHealth;
+
     [Header("Debug")]
     public bool destroyOnDeath = true;
     public float deathDelay = 3.0f; // Animasyon için zaman tanı
