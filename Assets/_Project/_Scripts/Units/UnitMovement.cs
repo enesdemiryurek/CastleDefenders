@@ -16,9 +16,49 @@ public class UnitMovement : NetworkBehaviour
 
     [SyncVar] public int SquadIndex;
 
+    private bool isDead = false;
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        
+        // Health eventine abone ol
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath += OnDeathHandler;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath -= OnDeathHandler;
+        }
+    }
+
+    private void OnDeathHandler()
+    {
+        isDead = true;
+        
+        if (agent != null)
+        {
+            if (agent.isOnNavMesh)
+            {
+                agent.isStopped = true;
+            }
+            agent.enabled = false; // NavMesh'ten kopar
+        }
+
+        // Animasyon Tetikle
+        Animator anim = GetComponent<Animator>();
+        if (anim != null) anim.SetTrigger("Die");
+        
+        // Network Animator varsa onu da tetikle (Senkronizasyon için)
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger("Die");
     }
 
     public override void OnStartServer()
@@ -34,8 +74,9 @@ public class UnitMovement : NetworkBehaviour
     [ServerCallback]
     private void Update()
     {
+        if (isDead) return;
         if (!isCharging) return;
-
+        
         if (Time.time - lastUpdateTime < updateInterval) return;
         lastUpdateTime = Time.time;
 

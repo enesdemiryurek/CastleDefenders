@@ -95,10 +95,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6596857127091834229}
-  - component: {fileID: 6877396304305024391}
   - component: {fileID: 5251553871611556185}
   - component: {fileID: 8660662503199377544}
   - component: {fileID: 687439642000821366}
+  - component: {fileID: -1951279815413418491}
   m_Layer: 0
   m_Name: Broadhead_Arrow 1
   m_TagString: Untagged
@@ -122,24 +122,6 @@ Transform:
   - {fileID: 3804542675826718247}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &6877396304305024391
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7526483880363365596}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1ccd7098bcac5924786d5b5a398468ab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  syncDirection: 0
-  syncMode: 0
-  syncInterval: 0
-  speed: 20
-  damage: 30
-  lifetime: 5
 --- !u!54 &5251553871611556185
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -207,3 +189,23 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!114 &-1951279815413418491
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7526483880363365596}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 32f8c6865227c364b8f8c4ca386d7ddd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  damage: 20
+  launchForce: 50
+  lifetime: 5
+  modelRotationOffset: {x: 90, y: 0, z: 0}
+  rotateInDirection: 1

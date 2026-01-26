@@ -16,14 +16,27 @@ public class UnitAttack : NetworkBehaviour
 
     private NavMeshAgent agent;
     private float lastAttackTime;
+    private bool isDead = false;
 
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath += () => 
+            {
+                 isDead = true; 
+                 StopAllCoroutines(); // Saldırıları durdur
+                 CancelInvoke();
+            };
+        }
     }
 
     private void Update()
     {
+        if (isDead) return;
         if (!NetworkServer.active) return;
 
         TryAttackNearestEnemy();
@@ -100,7 +113,7 @@ public class UnitAttack : NetworkBehaviour
 
     private void ResumeMovement()
     {
-        if (agent != null && agent.enabled)
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
         {
             agent.isStopped = false;
         }

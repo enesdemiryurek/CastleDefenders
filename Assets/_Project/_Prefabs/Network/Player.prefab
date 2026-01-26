@@ -512,7 +512,7 @@ MonoBehaviour:
   syncInterval: 0
   maxHealth: 500
   destroyOnDeath: 1
-  deathDelay: 3
+  deathDelay: 6
 --- !u!114 &6795650368668275692
 MonoBehaviour:
   m_ObjectHideFlags: 0

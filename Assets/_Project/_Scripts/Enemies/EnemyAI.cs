@@ -29,11 +29,13 @@ public class EnemyAI : NetworkBehaviour
     private Transform currentTarget;
     private float lastUpdateTime;
     private float lastAttackTime;
+    private bool isDead = false;
 
     // ... (Awake and other methods remain same) ...
 
     private void AttackTarget()
     {
+        if (isDead) return;
         // Cooldown kontrolü
         if (Time.time - lastAttackTime < attackCooldown) return;
         lastAttackTime = Time.time;
@@ -91,9 +93,27 @@ public class EnemyAI : NetworkBehaviour
 
         if (projectilePrefab != null && projectileSpawnPoint != null)
         {
-            // Oku SpawnPoint'in açısıyla fırlat (Böylece kullanıcı düzeltebilir)
+            // Oku SpawnPoint'in açısıyla fırlat
+            // AMA ÖNCE: SpawnPoint'in hedefe tam baktığından emin ol
+            if (currentTarget != null)
+            {
+                // Hedef pozisyonunu al (Biraz yukarı nişan al ki ayaklarına sıkmasın)
+                Vector3 targetPos = currentTarget.position + Vector3.up * 1.0f;
+                
+                // Spawn noktasını hedefe çevir
+                projectileSpawnPoint.LookAt(targetPos);
+            }
+
             GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
             NetworkServer.Spawn(proj);
+
+            // Eğer Fizikli Ok (Ballistic) ise fırlat
+            BallisticProjectile ballistic = proj.GetComponent<BallisticProjectile>();
+            if (ballistic != null)
+            {
+                // Hedef pozisyonunu ver (Launch içinde Rpc var)
+                ballistic.Launch(currentTarget != null ? currentTarget.position : transform.forward * 10f);
+            }
         }
     }
 
@@ -102,6 +122,45 @@ public class EnemyAI : NetworkBehaviour
         agent = GetComponent<NavMeshAgent>();
         if (animator == null) animator = GetComponentInChildren<Animator>();
         if (networkAnimator == null) networkAnimator = GetComponent<NetworkAnimator>();
+
+        // Health eventine abone ol
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath += OnDeathHandler;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath -= OnDeathHandler;
+        }
+    }
+
+    private void OnDeathHandler()
+    {
+        isDead = true;
+        
+        if (agent != null)
+        {
+            // Hata vermemesi için önce NavMesh üzerinde mi diye bak
+            if (agent.isOnNavMesh) 
+            {
+                agent.isStopped = true;
+            }
+            agent.enabled = false; // NavMesh'ten tamamen kopar (Havada kalmasın)
+        }
+
+        // Animasyon Tetikle
+        if (networkAnimator != null) networkAnimator.SetTrigger("Die");
+        else if (animator != null) animator.SetTrigger("Die");
+        
+        // Saldırı eventini durdur
+        StopAllCoroutines();
+        CancelInvoke();
     }
 
     public override void OnStartServer()
@@ -111,6 +170,8 @@ public class EnemyAI : NetworkBehaviour
 
     private void Update()
     {
+        if (isDead) return;
+
         // Sadece Server karar verir
         if (!NetworkServer.active) return;
         
@@ -161,11 +222,20 @@ public class EnemyAI : NetworkBehaviour
             }
         }
 
-        // 2. Hedef Seçimi (Rastgelelik ekle ki hepsi tek kişiye dalmasın)
+        // 2. Hedef Seçimi (En Yakınlara Öncelik Ver ama Dağıl)
         if (validTargets.Count > 0)
         {
-            // En yakındakini değil, menzildeki rastgele birini seç
-            currentTarget = validTargets[Random.Range(0, validTargets.Count)];
+            // Mesafeye göre sırala (En yakından en uzağa)
+            validTargets.Sort((a, b) => 
+            {
+                float d1 = Vector3.Distance(transform.position, a.position);
+                float d2 = Vector3.Distance(transform.position, b.position);
+                return d1.CompareTo(d2);
+            });
+
+            // En yakın 3 kişi arasından rastgele seç (Dağılım olması için)
+            int countToConsider = Mathf.Min(validTargets.Count, 3);
+            currentTarget = validTargets[Random.Range(0, countToConsider)];
         }
         else
         {
@@ -230,7 +300,7 @@ public class EnemyAI : NetworkBehaviour
 
     private void ResumeMovement()
     {
-        if (agent != null && agent.enabled)
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
         {
             agent.isStopped = false;
         }

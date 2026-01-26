@@ -26,18 +26,46 @@ public class SquadSpawner : NetworkBehaviour
     [Server]
     private void SpawnSquad()
     {
-        if (unitPrefabs == null || unitPrefabs.Length == 0)
+        // 1. Veri Kaynağını Belirle (SquadManager varsa oradan, yoksa Inspector'dan)
+        GameObject[] unitsToSpawn = null;
+
+        if (SquadManager.Instance != null)
         {
-            Debug.LogError("SquadSpawner: Unit Prefabs are missing!");
+            // UnitData'dan GameObject dizisine çevir
+            var selectedData = SquadManager.Instance.selectedSquads;
+            unitsToSpawn = new GameObject[selectedData.Length];
+            
+            bool anySelected = false;
+            for(int i=0; i<selectedData.Length; i++)
+            {
+                if (selectedData[i] != null)
+                {
+                    unitsToSpawn[i] = selectedData[i].unitPrefab;
+                    anySelected = true;
+                }
+            }
+            
+            // Eğer SquadManager var ama hiç seçim yapılmamışsa (örn: direkt sahneden başlattık)
+            // Inspector ayarlarını kullan (Fallback)
+            if (!anySelected) unitsToSpawn = unitPrefabs;
+        }
+        else
+        {
+            unitsToSpawn = unitPrefabs;
+        }
+
+        if (unitsToSpawn == null || unitsToSpawn.Length == 0)
+        {
+            Debug.LogWarning("SquadSpawner: No units to spawn.");
             return;
         }
 
         Vector3 startPos = transform.position - (transform.forward * 3f); // Player'ın biraz arkası
 
         // HER BİR BİRLİK ÇEŞİDİ İÇİN DÖNGÜ
-        for (int squadIndex = 0; squadIndex < unitPrefabs.Length; squadIndex++)
+        for (int squadIndex = 0; squadIndex < unitsToSpawn.Length; squadIndex++)
         {
-            GameObject currentPrefab = unitPrefabs[squadIndex];
+            GameObject currentPrefab = unitsToSpawn[squadIndex];
             if (currentPrefab == null) continue;
 
             // Her yeni birlik bir öncekinin biraz daha arkasında dursun

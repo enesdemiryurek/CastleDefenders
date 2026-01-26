@@ -62,6 +62,18 @@ public class UnitAnimationController : NetworkBehaviour
     private void Start()
     {
         lastPosition = transform.position;
+        
+        // Robot gibi aynı anda yürümemeleri için rastgele offset VE hız değişimi
+        if (animator != null)
+        {
+            // 1. Rastgele yerden başla
+            AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
+            animator.Play(state.fullPathHash, 0, Random.Range(0f, 1f));
+
+            // 2. Animasyon hızını daha belirgin değiştir (0.8x ile 1.25x arası)
+            // Bu sayede zamanla birbirlerinden koparlar, asla senkron olmazlar.
+            animator.speed = Random.Range(0.8f, 1.25f);
+        }
     }
 
     private void Update()

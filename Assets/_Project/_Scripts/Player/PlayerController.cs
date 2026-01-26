@@ -20,10 +20,45 @@ public class PlayerController : NetworkBehaviour
     private CharacterController characterController;
     private Vector3 velocity; // Stores vertical velocity
 
+    private bool isDead = false;
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
+        
+        // Health eventine abone ol
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath += OnDeathHandler;
+        }
     }
+
+    private void OnDestroy()
+    {
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath -= OnDeathHandler;
+        }
+    }
+
+    private void OnDeathHandler()
+    {
+        isDead = true;
+        
+        // Hareketi Sıfırla
+        // velocity = Vector3.zero; // Local velocity
+        
+        // Animasyon Tetikle
+        Animator anim = GetComponent<Animator>();
+        if (anim != null)
+        {
+            anim.SetTrigger("Die");
+        }
+
+        Debug.Log("Player Controller: Input Disabled (DEAD)");
+    } 
 
     public override void OnStartLocalPlayer()
     {
@@ -36,9 +71,12 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
+        // Ölü olsa bile yerçekimi çalışmalı, o yüzden return etmiyoruz.
+        // Sadece Input'u keseceğiz (HandleMovement içinde).
+        
         // 1. Client Authority Check
         if (!isLocalPlayer) return;
-
+        
         HandleMovement();
     }
 
@@ -54,7 +92,7 @@ public class PlayerController : NetworkBehaviour
 
         // --- INPUT ---
         Vector2 input = Vector2.zero;
-        if (Keyboard.current != null)
+        if (!isDead && Keyboard.current != null) // Ölü değilse hareket et
         {
             if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1;
             if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1;
