@@ -295,7 +295,7 @@ MonoBehaviour:
   editorAutoStart: 0
   sendRate: 60
   offlineScene: Assets/_Project/_Scenes/MainMenu.unity
-  onlineScene: Assets/_Project/_Scenes/TheKeep.unity
+  onlineScene: Assets/_Project/_Scenes/Game.unity
   offlineSceneLoadDelay: 0
   transport: {fileID: 328830429}
   networkAddress: localhost

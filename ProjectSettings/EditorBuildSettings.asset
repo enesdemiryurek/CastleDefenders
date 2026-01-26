@@ -17,10 +17,10 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/_Project/_Scenes/Bootstrap.unity
     guid: c3888965028f2f940b662b07cde3d1ad
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Project/_Scenes/TheKeep.unity
     guid: 0e9fe61b8ee0b6b4aba2a05e7a41f106
-  - enabled: 1
+  - enabled: 0
     path: Assets/_Project/_Scenes/Lobby.unity
     guid: 1bb56ef2f70d56444bb51963b2a8bb09
   - enabled: 1
