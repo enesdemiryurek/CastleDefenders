@@ -8,6 +8,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1906244396605124749}
     m_Modifications:
+    - target: {fileID: 2664809017662355124, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: f5755b54032bef244a494851c42940a3, type: 2}
     - target: {fileID: 3796641629739830747, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -500,8 +504,13 @@ MonoBehaviour:
   targetLayers:
     serializedVersion: 2
     m_Bits: 1920
+  isRanged: 0
+  projectilePrefab: {fileID: 0}
+  projectileSpawnPoint: {fileID: 0}
   animator: {fileID: 1234732125905230047}
   networkAnimator: {fileID: 4002347044237292987}
+  attackTriggers:
+  - Attack
 --- !u!4 &6484514067795106438 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1852576806548013000, guid: 1c459cb67efa8f744981f7935d88efb7, type: 3}
@@ -571,6 +580,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 95.778
       objectReference: {fileID: 0}
+    - target: {fileID: 6476217220062300723, guid: 5b2ded89be1db7a42b37337c2d36908c, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: f5755b54032bef244a494851c42940a3, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

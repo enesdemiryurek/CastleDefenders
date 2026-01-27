@@ -51,7 +51,7 @@ PrefabInstance:
     - target: {fileID: -7511558181221131132, guid: f229ace6d610ac64d9d5c35e555ddd14, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 1aafa82488439f3458efa4772bbd25cd, type: 2}
+      objectReference: {fileID: 2100000, guid: f5755b54032bef244a494851c42940a3, type: 2}
     - target: {fileID: 919132149155446097, guid: f229ace6d610ac64d9d5c35e555ddd14, type: 3}
       propertyPath: m_Name
       value: Shield_03

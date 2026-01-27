@@ -305,6 +305,9 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 6502182839619065283, guid: e938449974157164ba5014af8dd33c5e, type: 3}
+      insertIndex: 0
+      addedObject: {fileID: 7059775062244985292}
     - targetCorrespondingSourceObject: {fileID: 1852576806548013000, guid: e938449974157164ba5014af8dd33c5e, type: 3}
       insertIndex: 0
       addedObject: {fileID: 6088482720612993815}
@@ -456,6 +459,7 @@ MonoBehaviour:
   - Attack1
   - Attack2
   dieParam: Die
+  hitParam: Hit
 --- !u!114 &6192189738215829422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -477,6 +481,9 @@ MonoBehaviour:
   enemyLayer:
     serializedVersion: 2
     m_Bits: 8
+  isRanged: 0
+  projectilePrefab: {fileID: 0}
+  projectileSpawnPoint: {fileID: 0}
 --- !u!114 &-2370513018874689911
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -573,4 +580,87 @@ CapsuleCollider:
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: e938449974157164ba5014af8dd33c5e, type: 3}
   m_PrefabInstance: {fileID: 4205316662830794899}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &6944601129190497616 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6502182839619065283, guid: e938449974157164ba5014af8dd33c5e, type: 3}
+  m_PrefabInstance: {fileID: 4205316662830794899}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &7382496546572168743
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 6944601129190497616}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: -0.14641856
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.19419585
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.68114555
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.69057256
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: -117.884
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 89.59
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 86.42
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 1f43fb90d04391149842a050bdc3c268, type: 2}
+    - target: {fileID: 919132149155446097, guid: 43d680a66146755428b97bb42159b473, type: 3}
+      propertyPath: m_Name
+      value: Meshy_AI_spartan_shield_0127141633_texture
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 43d680a66146755428b97bb42159b473, type: 3}
+--- !u!4 &7059775062244985292 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
+  m_PrefabInstance: {fileID: 7382496546572168743}
   m_PrefabAsset: {fileID: 0}

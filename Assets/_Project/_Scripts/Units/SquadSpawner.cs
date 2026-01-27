@@ -1,5 +1,6 @@
 using Mirror;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class SquadSpawner : NetworkBehaviour
 {
@@ -9,6 +10,7 @@ public class SquadSpawner : NetworkBehaviour
     [SerializeField] private float spacing = 1.5f;
     [SerializeField] private int unitsPerRow = 5;
     [SerializeField] private float distanceBetweenSquads = 8.0f; // Birlikler arası mesafe
+    [SerializeField] private float maxNavMeshDistance = 5.0f; // NavMesh bulma yarıçapı
 
     private PlayerUnitCommander commander;
 
@@ -80,6 +82,19 @@ public class SquadSpawner : NetworkBehaviour
 
                 Vector3 spawnPos = currentSquadStartPos + (transform.right * xOffset) - (transform.forward * zOffset);
                 
+                // FIX: NavMesh üzerinde geçerli bir nokta bul
+                NavMeshHit hit;
+                if (NavMesh.SamplePosition(spawnPos, out hit, maxNavMeshDistance, NavMesh.AllAreas))
+                {
+                    spawnPos = hit.position;
+                }
+                else
+                {
+                    // Eğer nokta bulunamazsa, bu askeri atlayabiliriz veya zorla pozisyonda oluştururuz
+                    // NavMeshAgent hata vereceği için en azından loglayalım
+                    // Debug.LogWarning($"[SquadSpawner] Could not find NavMesh near {spawnPos}");
+                }
+
                 // 1. Yarat
                 GameObject newUnit = Instantiate(currentPrefab, spawnPos, transform.rotation);
 

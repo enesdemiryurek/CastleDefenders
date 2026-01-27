@@ -1,5 +1,6 @@
 using Mirror;
 using UnityEngine;
+using UnityEngine.AI;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -23,6 +24,7 @@ public class EnemySpawner : NetworkBehaviour
 
     [Header("Formation Settings")]
     [SerializeField] private float spacing = 1.5f; // Askerler arası boşluk
+    [SerializeField] private float maxNavMeshDistance = 5.0f; // NavMesh bulma yarıçapı
 
     public override void OnStartServer()
     {
@@ -78,6 +80,13 @@ public class EnemySpawner : NetworkBehaviour
             
             // SpawnPoint'in rotasyonuna göre ofseti döndür (Böylece SpawnPoint nereye bakıyorsa oraya doğru dizilirler)
             Vector3 finalPosition = config.spawnPoint.position + (config.spawnPoint.rotation * offset);
+
+            // FIX: NavMesh üzerinde geçerli bir nokta bul
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(finalPosition, out hit, maxNavMeshDistance, NavMesh.AllAreas))
+            {
+                finalPosition = hit.position;
+            }
 
             GameObject newEnemy = Instantiate(config.enemyPrefab, finalPosition, config.spawnPoint.rotation);
             NetworkServer.Spawn(newEnemy);

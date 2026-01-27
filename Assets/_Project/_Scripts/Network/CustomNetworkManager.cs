@@ -30,9 +30,22 @@ public class CustomNetworkManager : NetworkManager
 
     public override void OnServerAddPlayer(NetworkConnectionToClient conn)
     {
-        // Basic implementation: Spawn the player prefab
-        // In the future, this can be customized to spawn different prefabs based on GameState
-        base.OnServerAddPlayer(conn);
+        // Custom spawn logic to prevent spawning in void if no NetworkStartPosition exists
+        Transform startPos = GetStartPosition();
+        GameObject player;
+
+        if (startPos != null)
+        {
+            player = Instantiate(playerPrefab, startPos.position, startPos.rotation);
+        }
+        else
+        {
+            // Fallback to a safe height if no spawn point is found
+            Debug.LogWarning("[NetworkManager] No NetworkStartPosition found! Spawning at safe default (0, 2, 0).");
+            player = Instantiate(playerPrefab, new Vector3(0, 2, 0), Quaternion.identity);
+        }
+
+        NetworkServer.AddPlayerForConnection(conn, player);
         
         Debug.Log($"[NetworkManager] Player Added: {conn.connectionId}");
     }
