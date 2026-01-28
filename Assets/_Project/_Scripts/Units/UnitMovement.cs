@@ -14,6 +14,12 @@ public class UnitMovement : NetworkBehaviour
     private bool isCharging = false;
     private float lastUpdateTime;
 
+    [Header("Visual Settings")]
+    [SerializeField] private float terrainHeightCorrection = 0f; // Bake ile çözüldü, default 0
+    [SerializeField] private Transform modelTransform; // Görsel modelin (Child) referansı
+    [SerializeField] private LayerMask groundLayer = -1; // Default: Everything
+    [SerializeField] private float alignmentSpeed = 10f;
+
     [SyncVar] public int SquadIndex;
 
     private bool isDead = false;
@@ -21,6 +27,18 @@ public class UnitMovement : NetworkBehaviour
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        // agent.baseOffset atamasını kaldırdık çünkü NavMesh Bake işlemiyle çözüldü.
+        // Artık script manuel olarak yüksekliğe müdahale etmeyecek.
+
+        // Eğer model atanmamışsa otomatik bul (Animator'un olduğu obje)
+        if (modelTransform == null)
+        {
+            Animator anim = GetComponentInChildren<Animator>();
+            if (anim != null && anim.transform != transform)
+            {
+                modelTransform = anim.transform;
+            }
+        }
         
         // Health eventine abone ol
         Health health = GetComponent<Health>();
@@ -71,9 +89,14 @@ public class UnitMovement : NetworkBehaviour
         agent.autoBraking = true;
     }
 
-    [ServerCallback]
     private void Update()
     {
+        // 1. Görsel Hizalama (Client & Server)
+        AlignModelToGround();
+
+        // 2. Sunucu Mantığı (Hareket & Charge)
+        if (!isServer) return;
+
         if (isDead) return;
         if (!isCharging) return;
         
@@ -87,6 +110,49 @@ public class UnitMovement : NetworkBehaviour
             {
                 agent.SetDestination(target.position);
             }
+        }
+    }
+
+    private void AlignModelToGround()
+    {
+        if (modelTransform == null) return;
+
+        // Player'ın biraz yukarısından aşağı ray at
+        Ray ray = new Ray(transform.position + Vector3.up, Vector3.down);
+        
+        // RaycastAll kullanarak kendimize çarpma durumunu engelliyoruz
+        RaycastHit[] hits = Physics.RaycastAll(ray, 3f, groundLayer);
+        
+        RaycastHit bestHit = new RaycastHit();
+        bool found = false;
+        float minDst = float.MaxValue;
+
+        foreach (var hit in hits)
+        {
+            // Kendimize veya alt objelerimize çarpıyorsak yoksay
+            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+            
+            // Trigger'ları yoksay (Opsiyonel ama güvenli)
+            if (hit.collider.isTrigger) continue;
+
+            if (hit.distance < minDst)
+            {
+                minDst = hit.distance;
+                bestHit = hit;
+                found = true;
+            }
+        }
+
+        if (found)
+        {
+            // Zeminin normaline göre hedef rotasyon
+            Quaternion targetRotation = Quaternion.FromToRotation(transform.up, bestHit.normal) * transform.rotation;
+            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, targetRotation, Time.deltaTime * alignmentSpeed);
+        }
+        else
+        {
+            // Zemin bulunamazsa varsayılan dik duruşa yavaşça dön
+            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, transform.rotation, Time.deltaTime * alignmentSpeed);
         }
     }
 
@@ -115,7 +181,11 @@ public class UnitMovement : NetworkBehaviour
     public void StartCharging()
     {
         isCharging = true;
-        agent.isStopped = false;
+        
+        if (agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+        }
     }
 
     [Server]

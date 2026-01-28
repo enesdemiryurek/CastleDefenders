@@ -293,10 +293,19 @@ MonoBehaviour:
   targetLayers:
     serializedVersion: 2
     m_Bits: 1920
+  isRanged: 0
+  projectilePrefab: {fileID: 0}
+  projectileSpawnPoint: {fileID: 0}
   animator: {fileID: 7221661055537758008}
   networkAnimator: {fileID: 2130529253383901089}
   attackTriggers:
   - Attack
+  terrainHeightCorrection: 1.4
+  modelTransform: {fileID: 0}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  alignmentSpeed: 10
 --- !u!114 &8179704410268294494
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -469,6 +478,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3219531318560817727}
     m_Modifications:
+    - target: {fileID: 2664809017662355124, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 2095507cf44ed374eaa5455a2e5e0b8c, type: 2}
     - target: {fileID: 3796641629739830747, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.009400029

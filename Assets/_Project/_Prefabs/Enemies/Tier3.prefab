@@ -416,6 +416,12 @@ MonoBehaviour:
   attackTriggers:
   - Attack
   - Attack1
+  terrainHeightCorrection: 1.4
+  modelTransform: {fileID: 0}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  alignmentSpeed: 10
 --- !u!114 &6777463032983383210
 MonoBehaviour:
   m_ObjectHideFlags: 0

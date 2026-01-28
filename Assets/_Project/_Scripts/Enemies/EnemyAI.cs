@@ -24,6 +24,10 @@ public class EnemyAI : NetworkBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private NetworkAnimator networkAnimator;
     [SerializeField] private string[] attackTriggers = { "Attack" }; // Birden fazla saldırı animasyonu için
+    [SerializeField] private float terrainHeightCorrection = 0f; // Bake ile çözüldü, default 0
+    [SerializeField] private Transform modelTransform; // Görsel için
+    [SerializeField] private LayerMask groundLayer = -1; // Default: Everything (Tüm katmanları görsün)
+    [SerializeField] private float alignmentSpeed = 10f;
 
     private NavMeshAgent agent;
     private Transform currentTarget;
@@ -117,9 +121,22 @@ public class EnemyAI : NetworkBehaviour
         }
     }
 
+    // ...
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        // agent.baseOffset atamasını kaldırdık. NavMesh ayarları geçerli olacak.
+
+        if (modelTransform == null)
+        {
+             if (animator != null) modelTransform = animator.transform;
+             else {
+                 Animator anim = GetComponentInChildren<Animator>();
+                 if (anim != null && anim.transform != transform) modelTransform = anim.transform;
+             }
+        }
+
         if (animator == null) animator = GetComponentInChildren<Animator>();
         if (networkAnimator == null) networkAnimator = GetComponent<NetworkAnimator>();
 
@@ -170,6 +187,8 @@ public class EnemyAI : NetworkBehaviour
 
     private void Update()
     {
+        AlignModelToGround();
+
         if (isDead) return;
 
         // Sadece Server karar verir
@@ -189,62 +208,103 @@ public class EnemyAI : NetworkBehaviour
         MoveToTarget();
     }
 
-    private void FindBestTarget()
+    private void AlignModelToGround()
     {
-        // 0. Mevcut hedef hala geçerli mi? (Sticky Targeting)
-        // Eğer zaten bir hedefim varsa ve hala canlıysa/menzildeyse değiştirme.
-        // Bu sayede düşmanlar "kararsız" gibi titremez, birine kilitlenir.
-        if (currentTarget != null)
+        if (modelTransform == null) return;
+
+        Ray ray = new Ray(transform.position + Vector3.up, Vector3.down);
+        RaycastHit[] hits = Physics.RaycastAll(ray, 3f, groundLayer);
+
+        RaycastHit bestHit = new RaycastHit();
+        bool found = false;
+        float minDst = float.MaxValue;
+
+        foreach (var hit in hits)
         {
-            IDamageable currentHp = currentTarget.GetComponent<IDamageable>();
-            float distToCurrent = Vector3.Distance(transform.position, currentTarget.position);
-            
-            // Hedef hala canlıysa ve aşırı uzaklaşmadıysa (Aggro * 1.5) devam et
-            if (currentHp != null && currentHp.CurrentHealth > 0 && distToCurrent < aggroRange * 1.5f)
+            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+            if (hit.collider.isTrigger) continue;
+
+            if (hit.distance < minDst)
             {
-                return;
+                minDst = hit.distance;
+                bestHit = hit;
+                found = true;
             }
         }
 
-        // 1. Etraftaki "Canlıları" ara (Unit veya Player)
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
-        
-        System.Collections.Generic.List<Transform> validTargets = new System.Collections.Generic.List<Transform>();
-
-        foreach (var hit in hitColliders)
+        if (found)
         {
-            if (hit.transform == transform) continue;
-
-            // Unit veya Player kontrolü
-            if (hit.GetComponentInParent<PlayerController>() != null || hit.GetComponentInParent<UnitMovement>() != null)
-            {
-                validTargets.Add(hit.transform);
-            }
-        }
-
-        // 2. Hedef Seçimi (En Yakınlara Öncelik Ver ama Dağıl)
-        if (validTargets.Count > 0)
-        {
-            // Mesafeye göre sırala (En yakından en uzağa)
-            validTargets.Sort((a, b) => 
-            {
-                float d1 = Vector3.Distance(transform.position, a.position);
-                float d2 = Vector3.Distance(transform.position, b.position);
-                return d1.CompareTo(d2);
-            });
-
-            // En yakın 3 kişi arasından rastgele seç (Dağılım olması için)
-            int countToConsider = Mathf.Min(validTargets.Count, 3);
-            currentTarget = validTargets[Random.Range(0, countToConsider)];
+            Quaternion targetRotation = Quaternion.FromToRotation(transform.up, bestHit.normal) * transform.rotation;
+            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, targetRotation, Time.deltaTime * alignmentSpeed);
         }
         else
         {
-            // Kimse yoksa hedef-> TAHT
-            if (Throne.Instance != null)
-                currentTarget = Throne.Instance.transform;
-            else
-                currentTarget = null;
+            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, transform.rotation, Time.deltaTime * alignmentSpeed);
         }
+    }
+
+    private void FindBestTarget()
+    {
+        // Aday Hedefleri Belirle
+        System.Collections.Generic.List<Transform> candidates = new System.Collections.Generic.List<Transform>();
+        
+        // 1. Yerel Arama (Aggro Range)
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
+        foreach (var hit in hitColliders)
+        {
+            if (hit.transform == transform) continue;
+            if (hit.GetComponentInParent<PlayerController>() != null || hit.GetComponentInParent<UnitMovement>() != null)
+            {
+                candidates.Add(hit.transform);
+            }
+        }
+
+        // 2. Global Arama (Eğer kimse yoksa)
+        if (candidates.Count == 0)
+        {
+            foreach (var p in FindObjectsByType<PlayerController>(FindObjectsSortMode.None)) candidates.Add(p.transform);
+            foreach (var u in FindObjectsByType<UnitMovement>(FindObjectsSortMode.None)) candidates.Add(u.transform);
+        }
+
+        if (candidates.Count == 0) return;
+
+        // 3. Organik Hedef Seçimi (Mesafe + Rastgelelik)
+        Transform bestCandidate = null;
+        float bestScore = float.MaxValue;
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate == null) continue;
+            
+            float dist = Vector3.Distance(transform.position, candidate.position);
+            
+            // "Kişilik" Faktörü: Her düşman, hedeflere biraz farklı gözle bakar.
+            // Mesafeye -5 ile +5 arasında rastgele bir "Gürültü" ekliyoruz.
+            // Böylece hepsi matematiksel olarak en yakındaki TEK kişiye saldırmaz, dağılırlar.
+            float randomNoise = Random.Range(-5f, 5f);
+            
+            // Player için çok hafif bir "Geri Planda Kalma" payı (Gerçekçilik için askerler önde olur)
+            // Ama eskisi gibi +100 değil, sadece +2 metre. Yani çok yakınına girersen sana dalar.
+            float roleBias = 0f;
+            if (candidate.GetComponentInParent<PlayerController>() != null) roleBias = 2f;
+
+            float score = dist + randomNoise + roleBias;
+
+            // Mevcut hedefe sadakat (Sticky)
+            // Eğer bu aday zaten benim hedefimse, puanını biraz düşür (daha cazip kıl) ki zırt pırt hedef değiştirmesin.
+            if (candidate == currentTarget)
+            {
+                score -= 3f; 
+            }
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        currentTarget = bestCandidate;
     }
 
     private void MoveToTarget()
