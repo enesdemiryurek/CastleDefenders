@@ -99,7 +99,7 @@ public class PlayerCombat : NetworkBehaviour
             IDamageable damageable = enemy.GetComponent<IDamageable>();
             if (damageable != null)
             {
-                damageable.TakeDamage(damage);
+                damageable.TakeDamage(damage, transform.position);
                 Debug.Log($"Hit enemy: {enemy.name}");
             }
         }

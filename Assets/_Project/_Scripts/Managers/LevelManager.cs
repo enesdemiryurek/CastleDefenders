@@ -14,18 +14,30 @@ public class LevelManager : NetworkBehaviour
 
     [Header("UI References")]
     [SerializeField] private GameObject victoryPanel; // Zafer Ekranı (Panel)
-    [SerializeField] private GameObject objectiveText; // "Kaleye Ulaş" yazısı
+    [SerializeField] private GameObject defeatPanel; // Bozgun Ekranı
 
     private int playersInZone = 0;
+    private bool isLevelActive = true;
 
     private void Awake()
     {
         Instance = this;
     }
 
+    private void Start()
+    {
+        // Periyodik kontrol başlat
+        if (isServer)
+        {
+            InvokeRepeating(nameof(CheckDefeatCondition), 5f, 1f);
+        }
+    }
+
     [Server]
     public void PlayerEnteredWinZone()
     {
+        if (!isLevelActive) return;
+
         playersInZone++;
         Debug.Log($"[LevelManager] Player entered zone. ({playersInZone}/{NetworkServer.connections.Count})");
         CheckWinCondition();
@@ -34,6 +46,8 @@ public class LevelManager : NetworkBehaviour
     [Server]
     public void PlayerExitedWinZone()
     {
+        if (!isLevelActive) return;
+
         playersInZone--;
         Debug.Log($"[LevelManager] Player left zone. ({playersInZone}/{NetworkServer.connections.Count})");
     }
@@ -41,14 +55,47 @@ public class LevelManager : NetworkBehaviour
     [Server]
     private void CheckWinCondition()
     {
+        if (!isLevelActive) return;
+
         // Tüm oyuncular bölgede mi?
-        // NetworkServer.connections.Count aktif bağlantı sayısını verir.
-        if (playersInZone >= NetworkServer.connections.Count)
+        if (playersInZone >= NetworkServer.connections.Count && NetworkServer.connections.Count > 0)
         {
             Debug.Log("[LevelManager] VICTORY! All players reached the goal.");
-            RpcShowVictory();
-            StartCoroutine(LoadNextLevelRoutine());
+            Victory();
         }
+    }
+
+    [Server]
+    private void CheckDefeatCondition()
+    {
+        if (!isLevelActive) return;
+
+        // Sahnedeki tüm oyuncuları bul
+        PlayerController[] activePlayers = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
+        
+        // Eğer hiç oyuncu kalmadıysa (hepsi öldü ve yok olduysa) VE oyun başlamışsa (connection var)
+        if (activePlayers.Length == 0 && NetworkServer.connections.Count > 0)
+        {
+            Debug.Log("[LevelManager] DEFEAT! All players are dead.");
+            Defeat();
+        }
+    }
+
+    [Server]
+    private void Victory()
+    {
+        isLevelActive = false;
+        RpcShowVictory();
+        StartCoroutine(LoadNextLevelRoutine());
+    }
+
+    [Server]
+    private void Defeat()
+    {
+        isLevelActive = false;
+        RpcShowDefeat();
+        // İsteğe bağlı: Sahneyi yeniden başlat veya Lobby'e dön
+        // StartCoroutine(RestartLevelRoutine());
     }
 
     [ClientRpc]
@@ -57,7 +104,15 @@ public class LevelManager : NetworkBehaviour
         if (victoryPanel != null)
         {
             victoryPanel.SetActive(true);
-            // Burada güzel bir ses veya efekt de çalınabilir
+        }
+    }
+
+    [ClientRpc]
+    private void RpcShowDefeat()
+    {
+        if (defeatPanel != null)
+        {
+            defeatPanel.SetActive(true);
         }
     }
 
@@ -65,8 +120,6 @@ public class LevelManager : NetworkBehaviour
     private IEnumerator LoadNextLevelRoutine()
     {
         yield return new WaitForSeconds(winDelay);
-        
-        // "TheKeep" sahnesine dön
         NetworkManager.singleton.ServerChangeScene(nextSceneName);
     }
 }

@@ -25,9 +25,20 @@ public class Health : NetworkBehaviour, IDamageable
     }
 
     [Server]
-    public void TakeDamage(int amount)
+    public void TakeDamage(int amount, Vector3? damageSource = null)
     {
         if (currentHealth <= 0) return;
+
+        // Kalkan Sistemi Kontrolü
+        ShieldSystem shield = GetComponent<ShieldSystem>();
+        if (shield != null && damageSource.HasValue)
+        {
+            // Bloğu dene. Eğer bloklarsa hasarı azaltır veya sıfırlar.
+            // also returns whether execution should continue (e.g. fully blocked?)
+            amount = shield.TryBlock(amount, damageSource.Value);
+        }
+
+        if (amount <= 0) return; // Tam bloklandıysa can gitmesin
 
         int oldHealth = currentHealth;
         currentHealth -= amount;

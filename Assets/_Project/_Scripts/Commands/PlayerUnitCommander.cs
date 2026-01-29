@@ -118,23 +118,27 @@ public class PlayerUnitCommander : NetworkBehaviour
         myUnits.RemoveAll(u => u == null);
         
         int i = 0;
-        int rows = 5;
-        float spacing = 2f;
-
-        // Sadece seçili takımı filtrele
+        // Shield Wall için özel sıkışık formasyon (2 sıra halinde)
+        // Ancak seçili birim sayısına göre dinamik ayarlı
         var selectedUnits = myUnits.FindAll(u => u.SquadIndex == squadIndex);
+        
+        int unitsPerRow = Mathf.CeilToInt(selectedUnits.Count / 2f); 
+        if (unitsPerRow < 5) unitsPerRow = 5; // En az 5'li hat
+
+        float spacing = 1.1f; // Hafif pay bıraktık (1.0f sıkışmaya neden olabiliyor)
 
         foreach (UnitMovement unit in selectedUnits)
         {
             if (unit == null) continue;
-            
+
             // X ve Z hesabı
-            float xOffset = (i % rows) * spacing - (rows * spacing / 2f);
-            float zOffset = (i / rows) * spacing;
+            float xOffset = (i % unitsPerRow) * spacing - (unitsPerRow * spacing / 2f);
+            float zOffset = (i / unitsPerRow) * spacing; 
 
             Vector3 finalPos = targetPosition + (formationRotation * new Vector3(xOffset, 0, -zOffset));
             
-            unit.MoveTo(finalPos);
+            // X ile hareket emri verince ShieldWall aç
+            unit.MoveTo(finalPos, formationRotation, true);
             i++;
         }
     }

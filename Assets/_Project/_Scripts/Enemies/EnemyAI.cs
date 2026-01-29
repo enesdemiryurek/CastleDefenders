@@ -85,7 +85,7 @@ public class EnemyAI : NetworkBehaviour
             IDamageable damageable = currentTarget.GetComponent<IDamageable>();
             if (damageable != null)
             {
-                damageable.TakeDamage(damage);
+                damageable.TakeDamage(damage, transform.position);
                 OnAttack?.Invoke();
             }
         }
@@ -183,6 +183,9 @@ public class EnemyAI : NetworkBehaviour
     public override void OnStartServer()
     {
         agent.enabled = true;
+        
+        // Saldırı menzilinin biraz içine girince dursun (iç içe geçmesinler)
+        agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
     }
 
     private void Update()
@@ -281,12 +284,14 @@ public class EnemyAI : NetworkBehaviour
             // "Kişilik" Faktörü: Her düşman, hedeflere biraz farklı gözle bakar.
             // Mesafeye -5 ile +5 arasında rastgele bir "Gürültü" ekliyoruz.
             // Böylece hepsi matematiksel olarak en yakındaki TEK kişiye saldırmaz, dağılırlar.
-            float randomNoise = Random.Range(-5f, 5f);
+            // "Kişilik" Faktörü: Biraz çeşitlilik olsun ama saçmalamasınlar
+            float randomNoise = Random.Range(-1f, 1f);
             
-            // Player için çok hafif bir "Geri Planda Kalma" payı (Gerçekçilik için askerler önde olur)
-            // Ama eskisi gibi +100 değil, sadece +2 metre. Yani çok yakınına girersen sana dalar.
+            // Player için YÜKSEK bir "Geri Planda Kalma" payı
+            // Normalde önce askerlere (Frontline) saldırmalılar.
+            // Askerler varken Player'a saldırması için Player'ın çooook yakında olması lazım.
             float roleBias = 0f;
-            if (candidate.GetComponentInParent<PlayerController>() != null) roleBias = 2f;
+            if (candidate.GetComponentInParent<PlayerController>() != null) roleBias = 10f; // +10 metre ceza
 
             float score = dist + randomNoise + roleBias;
 
@@ -340,16 +345,27 @@ public class EnemyAI : NetworkBehaviour
         // --- MELEE MANTIK (Klasik) ---
         else
         {
+            // Yaklaşma mantığı (NavMeshStopping Distance ayarı ile uyumlu olmalı)
             agent.SetDestination(currentTarget.position);
 
             if (dist <= attackRange)
             {
+                // Menzildeyiz: Dur, Dön ve Saldır
                 agent.isStopped = true;
+                agent.updateRotation = false; // NavMesh dönmesin, biz döndüreceğiz
+                
+                // Hedefe Dön
+                Vector3 lookPos = currentTarget.position;
+                lookPos.y = transform.position.y;
+                transform.LookAt(lookPos); // veya Smooth Rotate
+
                 AttackTarget();
             }
             else
             {
+                // Menzil dışındayız: Koş
                 agent.isStopped = false;
+                agent.updateRotation = true;
             }
         }
     }

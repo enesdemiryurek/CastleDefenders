@@ -529,13 +529,13 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   unitPrefabs:
-  - {fileID: 779360704632571355, guid: 709e4e27d4b5ca14f96e31ba5faeb771, type: 3}
-  - {fileID: 8559101773198800616, guid: b94e5b84476e58b4cacabbbd70fdecff, type: 3}
   - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
-  unitCountPerSquad: 10
-  spacing: 1
-  unitsPerRow: 5
-  distanceBetweenSquads: 8
+  - {fileID: 3780404385541898944, guid: 4ca489bb03e534a4dbf56d41d6ca68e9, type: 3}
+  - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
+  unitCountPerSquad: 20
+  spacing: 0.5
+  unitsPerRow: 10
+  distanceBetweenSquads: 2
   maxNavMeshDistance: 5
 --- !u!136 &6512980463654896627
 CapsuleCollider:

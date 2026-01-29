@@ -29,7 +29,7 @@ public class Projectile : NetworkBehaviour
         IDamageable target = other.GetComponent<IDamageable>();
         if (target != null)
         {
-            target.TakeDamage(damage);
+            target.TakeDamage(damage, transform.position);
             NetworkServer.Destroy(gameObject); // Oku yok et
         }
         else

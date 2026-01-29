@@ -97,7 +97,7 @@ public class BallisticProjectile : NetworkBehaviour
         if (target != null)
         {
             Debug.Log($"Arrow damaged (Trigger): {other.name}");
-            target.TakeDamage((int)damage);
+            target.TakeDamage((int)damage, transform.position);
             NetworkServer.Destroy(gameObject);
         }
     }

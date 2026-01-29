@@ -96,7 +96,7 @@ public class UnitAttack : NetworkBehaviour
         else
         {
             // Melee için direkt hasar (veya buraya da gecikme eklenebilir)
-            target.TakeDamage(damage);
+            target.TakeDamage(damage, transform.position);
         }
     }
 

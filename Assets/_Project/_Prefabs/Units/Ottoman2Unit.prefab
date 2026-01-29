@@ -324,6 +324,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3827202993707432996}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5133658839156254024}
   m_SourcePrefab: {fileID: 100100000, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
 --- !u!4 &348592572588169647 stripped
 Transform:
@@ -378,7 +381,13 @@ MonoBehaviour:
     m_Bits: 8
   updateInterval: 0.5
   terrainHeightCorrection: 1
+  modelTransform: {fileID: 0}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  alignmentSpeed: 10
   SquadIndex: 0
+  rotationSpeed: 5
 --- !u!114 &5150335227836989443
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -514,6 +523,29 @@ MonoBehaviour:
   - Attack1
   dieParam: Die
   hitParam: Hit
+--- !u!136 &5133658839156254024
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1265527873354341447}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5
+  m_Height: 1
+  m_Direction: 1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!4 &1935384873390065405 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
