@@ -11,7 +11,7 @@ PrefabInstance:
     - target: {fileID: 2664809017662355124, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: f5755b54032bef244a494851c42940a3, type: 2}
+      objectReference: {fileID: 2100000, guid: 2095507cf44ed374eaa5455a2e5e0b8c, type: 2}
     - target: {fileID: 3796641629739830747, guid: 59370a138a05ae54698bcdd0bafbc033, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -511,6 +511,12 @@ MonoBehaviour:
   networkAnimator: {fileID: 4002347044237292987}
   attackTriggers:
   - Attack
+  terrainHeightCorrection: 0
+  modelTransform: {fileID: 0}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  alignmentSpeed: 10
 --- !u!4 &6484514067795106438 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1852576806548013000, guid: 1c459cb67efa8f744981f7935d88efb7, type: 3}
@@ -583,7 +589,7 @@ PrefabInstance:
     - target: {fileID: 6476217220062300723, guid: 5b2ded89be1db7a42b37337c2d36908c, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: f5755b54032bef244a494851c42940a3, type: 2}
+      objectReference: {fileID: 2100000, guid: aba8ebdec2361e6428eba9874504b7f4, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

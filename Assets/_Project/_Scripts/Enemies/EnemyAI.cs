@@ -287,13 +287,20 @@ public class EnemyAI : NetworkBehaviour
             // "Kişilik" Faktörü: Biraz çeşitlilik olsun ama saçmalamasınlar
             float randomNoise = Random.Range(-1f, 1f);
             
-            // Player için YÜKSEK bir "Geri Planda Kalma" payı
-            // Normalde önce askerlere (Frontline) saldırmalılar.
-            // Askerler varken Player'a saldırması için Player'ın çooook yakında olması lazım.
             float roleBias = 0f;
             if (candidate.GetComponentInParent<PlayerController>() != null) roleBias = 10f; // +10 metre ceza
 
-            float score = dist + randomNoise + roleBias;
+            // (New) Kalabalık Cezası: Eğer hedefin etrafında çok düşman varsa, başka hedefe git
+            float crowdPenalty = 0f;
+            Collider[] admirers = Physics.OverlapSphere(candidate.position, 2.0f);
+            int allyCount = 0;
+            foreach(var col in admirers)
+            {
+                if (col.GetComponent<EnemyAI>() != null) allyCount++;
+            }
+            if (allyCount > 2) crowdPenalty = allyCount * 2.0f; // Her fazladan dost için +2 metre ceza (Uzaklaş)
+
+            float score = dist + randomNoise + roleBias + crowdPenalty;
 
             // Mevcut hedefe sadakat (Sticky)
             // Eğer bu aday zaten benim hedefimse, puanını biraz düşür (daha cazip kıl) ki zırt pırt hedef değiştirmesin.

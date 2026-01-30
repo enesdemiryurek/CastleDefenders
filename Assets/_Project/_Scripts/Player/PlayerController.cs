@@ -21,6 +21,7 @@ public class PlayerController : NetworkBehaviour
     private Vector3 velocity; // Stores vertical velocity
 
     private bool isDead = false;
+    public bool InputEnabled { get; set; } = true; // Dışarıdan kontrol edilebilir (Command Mode için)
 
     private void Awake()
     {
@@ -92,7 +93,7 @@ public class PlayerController : NetworkBehaviour
 
         // --- INPUT ---
         Vector2 input = Vector2.zero;
-        if (!isDead && Keyboard.current != null) // Ölü değilse hareket et
+        if (!isDead && InputEnabled && Keyboard.current != null) // Ölü değilse ve Input açıksa
         {
             if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1;
             if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1;

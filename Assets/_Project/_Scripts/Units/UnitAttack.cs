@@ -91,7 +91,7 @@ public class UnitAttack : NetworkBehaviour
         // Animasyonun "Shoot" noktasına gelmesi için azıcık bekleyip oku fırlatalım
         if (isRanged)
         {
-            StartCoroutine(SpawnProjectileDelayed(0.4f)); 
+            StartCoroutine(SpawnProjectileDelayed(target, 0.4f)); 
         }
         else
         {
@@ -100,14 +100,34 @@ public class UnitAttack : NetworkBehaviour
         }
     }
 
-    private System.Collections.IEnumerator SpawnProjectileDelayed(float delay)
+    private System.Collections.IEnumerator SpawnProjectileDelayed(IDamageable target, float delay)
     {
         yield return new WaitForSeconds(delay);
 
-        if (projectilePrefab != null && projectileSpawnPoint != null)
+        if (target != null && projectilePrefab != null && projectileSpawnPoint != null)
         {
-            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
-            NetworkServer.Spawn(proj);
+            // Hedef hala yaşıyor mu kontrol et (MonoBehaviour ise)
+            if (target is MonoBehaviour targetMono && targetMono != null)
+            {
+                GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
+                NetworkServer.Spawn(proj);
+
+                // Hedef Pozisyonu + Sapma (Realizm)
+                Vector3 targetPos = targetMono.transform.position;
+                
+                 // Hafif rastgelelik ekle (Tam 12'den vurmasınlar)
+                float accuracy = 1.0f; // Sapma miktarı (metre)
+                Vector3 spread = Random.insideUnitSphere * accuracy;
+                spread.y = 0; // Yüksekliği çok bozma
+                targetPos += spread;
+
+                // Projectile'i Fırlat
+                BallisticProjectile bp = proj.GetComponent<BallisticProjectile>();
+                if (bp != null)
+                {
+                    bp.Launch(targetPos);
+                }
+            }
         }
     }
 

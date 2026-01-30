@@ -233,6 +233,42 @@ public class UnitMovement : NetworkBehaviour
              if (agent != null) agent.updateRotation = true;
         }
 
+        // --- HÜCUM MANTIĞI (Mount & Blade Style) ---
+        if (isCharging)
+        {
+             // Periyodik hedef güncelleme (Sürekli Find yapmak pahalıdır)
+             if (Time.time - lastUpdateTime >= updateInterval)
+             {
+                 lastUpdateTime = Time.time;
+
+                 Transform target = FindNearestEnemy();
+                 if (target != null)
+                 {
+                     if (agent.isOnNavMesh)
+                     {
+                         agent.stoppingDistance = 1.0f; // Düşmanın dibine gir
+                         agent.SetDestination(target.position);
+                         agent.isStopped = false;
+                     }
+                     
+                     // Hedefe yaklaştıysak saldırı moduna geç (UnitAttack scripti varsa)
+                     float dist = Vector3.Distance(transform.position, target.position);
+                     if (dist <= 1.5f) // Saldırı menzili
+                     {
+                         // Yüzünü dön
+                         Vector3 lookPos = target.position; 
+                         lookPos.y = transform.position.y;
+                         transform.LookAt(lookPos);
+                     }
+                 }
+                 else
+                 {
+                     // Düşman yoksa olduğun yerde bekle (veya devriye gez - şimdilik bekle)
+                     if (agent.isOnNavMesh) agent.isStopped = true;
+                 }
+             }
+        }
+        
         // Animasyon Hızı Güncelle (Idle'a geçmesi için)
         if (agent != null && agent.isOnNavMesh)
         {

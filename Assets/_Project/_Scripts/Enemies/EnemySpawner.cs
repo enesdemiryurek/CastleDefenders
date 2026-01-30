@@ -73,6 +73,9 @@ public class EnemySpawner : NetworkBehaviour
         
         int columns = Mathf.CeilToInt((float)config.countPerWave / config.rows);
         
+        // DEBUG: Gerçek, saf pozisyon ne?
+        Debug.Log($"[EnemySpawner] '{config.name}' için kullanılan nokta: '{config.spawnPoint.name}'. Konumu: {config.spawnPoint.position}");
+
         for (int i = 0; i < config.countPerWave; i++)
         {
             // Matris pozisyonu (Satır, Sütun)
@@ -99,9 +102,15 @@ public class EnemySpawner : NetworkBehaviour
             {
                 finalPosition = hit.position;
             }
+            else
+            {
+                Debug.LogWarning($"[EnemySpawner] Config: {config.name}, Index: {i} - NavMesh Bulunamadı! Default pozisyon kullanılıyor: {finalPosition}");
+            }
 
             GameObject newEnemy = Instantiate(config.enemyPrefab, finalPosition, config.spawnPoint.rotation);
             NetworkServer.Spawn(newEnemy);
+            
+            if (i == 0) Debug.Log($"[EnemySpawner] {config.name} ilk birim doğdu. Pos: {finalPosition}");
         }
     }
 }
