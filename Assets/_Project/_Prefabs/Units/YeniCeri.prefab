@@ -312,7 +312,14 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   updateInterval: 0.5
+  terrainHeightCorrection: 0
+  modelTransform: {fileID: 0}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  alignmentSpeed: 10
   SquadIndex: 0
+  rotationSpeed: 5
 --- !u!95 &-6661711343767215269
 Animator:
   serializedVersion: 7
@@ -324,7 +331,7 @@ Animator:
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: c23c077eb05a4d44684d9e5c1a826085, type: 3}
   m_Controller: {fileID: 9100000, guid: 2f42bba5c881cf242ae67da6fe606662, type: 2}
-  m_CullingMode: 0
+  m_CullingMode: 1
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0
@@ -375,6 +382,7 @@ MonoBehaviour:
   attackParams:
   - Attack
   dieParam: Die
+  hitParam: Hit
 --- !u!114 &-1982017487878104228
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -396,6 +404,9 @@ MonoBehaviour:
   enemyLayer:
     serializedVersion: 2
     m_Bits: 8
+  isRanged: 0
+  projectilePrefab: {fileID: 0}
+  projectileSpawnPoint: {fileID: 0}
 --- !u!114 &-5377774409586078003
 MonoBehaviour:
   m_ObjectHideFlags: 0

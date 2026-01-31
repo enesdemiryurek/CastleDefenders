@@ -24,8 +24,11 @@ EditorBuildSettings:
     path: Assets/_Project/_Scenes/Lobby.unity
     guid: 1bb56ef2f70d56444bb51963b2a8bb09
   - enabled: 1
-    path: Assets/_Project/_Scenes/Game.unity
+    path: "Assets/_Project/_Scenes/Level1PusuB\xF6l\xFCm1.unity"
     guid: b8f0afb76c4347d43b57ffabd3ff6f47
+  - enabled: 0
+    path: "Assets/_Project/_Scenes/Level2K\xF6pr\xFCB\xF6l\xFCm1.unity"
+    guid: 2a3dc6549e55e1e4488b7c5be86521d4
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

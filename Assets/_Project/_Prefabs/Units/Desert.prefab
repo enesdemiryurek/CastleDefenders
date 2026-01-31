@@ -220,7 +220,7 @@ Animator:
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: 669a57a894c89c94e8b7c54aeb5d2342, type: 3}
   m_Controller: {fileID: 9100000, guid: 23e581fbb04a36e43a911e612de8a92c, type: 2}
-  m_CullingMode: 0
+  m_CullingMode: 1
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0

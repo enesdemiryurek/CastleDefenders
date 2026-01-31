@@ -403,7 +403,7 @@ MonoBehaviour:
   aggroRange: 10
   attackRange: 50
   damage: 10
-  attackCooldown: 1.5
+  attackCooldown: 3
   updateInterval: 0.5
   targetLayers:
     serializedVersion: 2
