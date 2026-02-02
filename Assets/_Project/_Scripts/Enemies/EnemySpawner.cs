@@ -24,7 +24,7 @@ public class EnemySpawner : NetworkBehaviour
 
     [Header("Formation Settings")]
     [SerializeField] private float spacing = 1.5f; // Askerler arası boşluk
-    [SerializeField] private float maxNavMeshDistance = 5.0f; // NavMesh bulma yarıçapı
+    [SerializeField] private float maxNavMeshDistance = 20.0f; // NavMesh bulma yarıçapı (Artırıldı)
 
     [Header("Trigger Settings")]
     [SerializeField] private bool playOnAwake = true; // Tikliyse oyun başlar başlamaz spawnlar, yoksa Trigger bekler.

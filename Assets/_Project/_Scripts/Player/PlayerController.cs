@@ -42,6 +42,8 @@ public class PlayerController : NetworkBehaviour
         {
             health.OnDeath -= OnDeathHandler;
         }
+
+        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterHero(transform);
     }
 
     private void OnDeathHandler()
@@ -60,6 +62,13 @@ public class PlayerController : NetworkBehaviour
 
         Debug.Log("Player Controller: Input Disabled (DEAD)");
     } 
+
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+        // Server tarafında kendini BattleManager'a kaydet (Düşmanlar seni bulsun)
+        if (BattleManager.Instance != null) BattleManager.Instance.RegisterHero(transform);
+    }
 
     public override void OnStartLocalPlayer()
     {

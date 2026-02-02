@@ -6,7 +6,7 @@ using UnityEngine.AI;
 public class UnitMovement : NetworkBehaviour
 {
     [Header("Charge Settings")]
-    [SerializeField] private float detectionRadius = 20f;
+    [SerializeField] private float detectionRadius = 5000f; // Bannerlord Style: GERÇEKTEN tüm harita (Physics Optimized)
     [SerializeField] private LayerMask enemyLayer;
     [SerializeField] private float updateInterval = 0.5f;
 
@@ -78,6 +78,8 @@ public class UnitMovement : NetworkBehaviour
         {
             health.OnDeath -= OnDeathHandler;
         }
+
+        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
     }
 
     private void OnDeathHandler()
@@ -104,6 +106,10 @@ public class UnitMovement : NetworkBehaviour
 
     public override void OnStartServer()
     {
+        base.OnStartServer();
+        // Savaş Yönetimine Kaydol
+        if (BattleManager.Instance != null) BattleManager.Instance.RegisterPlayerUnit(this);
+        
         // NavMeshAgent sadece Server'da çalışmalı
         agent.enabled = true;
         
@@ -157,31 +163,53 @@ public class UnitMovement : NetworkBehaviour
         }
     }
 
+    private float lastGlobalSearchTime;
+    private const float GLOBAL_SEARCH_INTERVAL = 3.0f;
+
+
+
     private Transform FindNearestEnemy()
     {
-        // "Herhangi bir yerdeki" düşmanı bulmak için tüm sahneyi tarıyoruz
-        // Upgrade: Unity 6+ için FindObjectsByType kullanımı
-        EnemyAI[] allEnemies = FindObjectsByType<EnemyAI>(FindObjectsSortMode.None);
-        
-        Transform bestTarget = null;
-        float closestDist = float.MaxValue;
+        // TARGETİNG SYSTEM 3.0 (BattleManager)
+        // Artık fizik kullanmıyoruz. Savaş meydanındaki herkesi bilen yöneticiye soruyoruz.
+        if (BattleManager.Instance == null) return null;
 
-        foreach (var enemy in allEnemies)
-        {
-            float d = Vector3.Distance(transform.position, enemy.transform.position);
-            if (d < closestDist)
-            {
-                closestDist = d;
-                bestTarget = enemy.transform;
-            }
-        }
-        return bestTarget;
+        return BattleManager.Instance.GetNearestEnemyForUnit(transform.position);
     }
 
     [Server]
     public void StartCharging()
     {
+        if (isCharging) return; // Zaten saldırıyorsa tekrar bağırmasın
+
+        StartCoroutine(ChargeSequence());
+    }
+
+    private System.Collections.IEnumerator ChargeSequence()
+    {
+        // 0. Hareketi Durdur (Olduğu yerde bağırsın)
+        if(agent.isOnNavMesh) 
+        {
+            agent.isStopped = true;
+            agent.ResetPath(); // Hedefi unut
+        }
+
+        // 1. Animasyonu Tetikle (Server -> Client)
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger("Charge");
+        else 
+        {
+             Animator anim = GetComponent<Animator>();
+             if(anim != null) anim.SetTrigger("Charge");
+        }
+
+        // 2. Gaza Gelme Süresi (Animasyon kadar bekle - 2.2 sn)
+        yield return new WaitForSeconds(2.2f);
+
+        // 3. Hücum Başlasın!
         isCharging = true;
+        // CRITICAL FIX: Charge başlar başlamaz düşman arasın (Beklemesin)
+        lastUpdateTime = -999f; 
         
         if (agent.isOnNavMesh)
         {
@@ -204,7 +232,11 @@ public class UnitMovement : NetworkBehaviour
     private void Update()
     {
         // 1. Görsel Hizalama (Client & Server)
-        AlignModelToGround();
+        // Performans Optimization: Her frame yerine 3 framed'e bir çalışsın
+        if (Time.frameCount % 3 == 0)
+        {
+            AlignModelToGround();
+        }
         
         // 2. Sunucu Mantığı (Hareket & Charge)
         if (!isServer) return;

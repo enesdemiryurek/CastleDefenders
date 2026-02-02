@@ -336,6 +336,9 @@ PrefabInstance:
       addedObject: {fileID: 8377473004418740619}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c61e01e1ac086a84fbed9274820f5db3, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 1016536781004877432}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c61e01e1ac086a84fbed9274820f5db3, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 1640611902881549432}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c61e01e1ac086a84fbed9274820f5db3, type: 3}
       insertIndex: -1
@@ -465,6 +468,28 @@ MonoBehaviour:
   syncInterval: 0
   clientAuthority: 0
   animator: {fileID: 1640611902881549432}
+--- !u!114 &1016536781004877432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8447505827813466657}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e1defe8bd1291441a52c286d8b69d68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  blockChance: 30
+  damageReductionPercent: 50
+  blockAngle: 120
+  networkAnimator: {fileID: 8377473004418740619}
+  animator: {fileID: 1640611902881549432}
+  blockTrigger: Block
+  blockSound: {fileID: 0}
 --- !u!95 &1640611902881549432
 Animator:
   serializedVersion: 7

@@ -6,7 +6,7 @@ using UnityEngine.AI;
 public class EnemyAI : NetworkBehaviour
 {
     [Header("AI Settings")]
-    [SerializeField] private float aggroRange = 10f;
+    [SerializeField] private float aggroRange = 5000f; // Bannerlord Style: GERÇEKTEN tüm harita (Physics Optimized)
     [SerializeField] private float attackRange = 2f;
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 1.5f;
@@ -33,6 +33,7 @@ public class EnemyAI : NetworkBehaviour
     private Transform currentTarget;
     private float lastUpdateTime;
     private float lastAttackTime;
+    private float lastGlobalSearchTime;
     private bool isDead = false;
 
     // ... (Awake and other methods remain same) ...
@@ -148,180 +149,169 @@ public class EnemyAI : NetworkBehaviour
         }
     }
 
-    private void OnDestroy()
-    {
-        Health health = GetComponent<Health>();
-        if (health != null)
-        {
-            health.OnDeath -= OnDeathHandler;
-        }
-    }
-
     private void OnDeathHandler()
     {
         isDead = true;
         
         if (agent != null)
         {
-            // Hata vermemesi için önce NavMesh üzerinde mi diye bak
             if (agent.isOnNavMesh) 
             {
                 agent.isStopped = true;
             }
-            agent.enabled = false; // NavMesh'ten tamamen kopar (Havada kalmasın)
+            agent.enabled = false; 
         }
 
-        // Animasyon Tetikle
         if (networkAnimator != null) networkAnimator.SetTrigger("Die");
         else if (animator != null) animator.SetTrigger("Die");
         
-        // Saldırı eventini durdur
         StopAllCoroutines();
         CancelInvoke();
     }
 
     public override void OnStartServer()
     {
-        agent.enabled = true;
+        base.OnStartServer();
         
-        // Saldırı menzilinin biraz içine girince dursun (iç içe geçmesinler)
-        agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
+        // NAVMESH FIX v2: Daha agresif zemin arama
+        if (agent != null)
+        {
+            // 1. Önce 20 birim yarıçapta ara
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 20.0f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+                agent.enabled = true;
+            }
+            // 2. Bulamazsan, aşağı doğru Ray atıp fiziksel zemini bul, oradan ara
+            else if (Physics.Raycast(transform.position + Vector3.up * 5f, Vector3.down, out RaycastHit physHit, 50f))
+            {
+                if (NavMesh.SamplePosition(physHit.point, out NavMeshHit hit2, 10.0f, NavMesh.AllAreas))
+                {
+                    agent.Warp(hit2.position);
+                    agent.enabled = true;
+                }
+            }
+            
+            if(!agent.enabled)
+            {
+                Debug.LogError($"[{name}] AI NavMesh bulamadi! (Range: 20f + Raycast)");
+            }
+        }
+        
+        if(agent != null) agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
+    }
+
+    private void Start()
+    {
+        // Client/Host senkronizasyonu için backup
+        if(NetworkServer.active && agent != null && !agent.isOnNavMesh)
+        {
+             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+                agent.enabled = true;
+            }
+        }
+    }
+
+    private void OnDestroy()
+    {
+        Health health = GetComponent<Health>();
+        if (health != null) health.OnDeath -= OnDeathHandler;
     }
 
     private void Update()
     {
-        AlignModelToGround();
-
         if (isDead) return;
+        if (!agent.enabled) return;
 
-        // Sadece Server karar verir
-        if (!NetworkServer.active) return;
-        
-        // Animasyonları güncelle (Hız)
-        if (animator != null && agent != null)
+        // Performans Optimization: Her frame hedef arama
+        if (Time.time - lastGlobalSearchTime > 0.5f) // 0.5 saniyede bir ara
         {
-            animator.SetFloat("Speed", agent.velocity.magnitude);
+            lastGlobalSearchTime = Time.time;
+            FindBestTarget();
         }
 
-        // Çok sık karar verme (Performans)
-        if (Time.time - lastUpdateTime < updateInterval) return;
-        lastUpdateTime = Time.time;
-
-        FindBestTarget();
-        MoveToTarget();
-    }
-
-    private void AlignModelToGround()
-    {
-        if (modelTransform == null) return;
-
-        Ray ray = new Ray(transform.position + Vector3.up, Vector3.down);
-        RaycastHit[] hits = Physics.RaycastAll(ray, 3f, groundLayer);
-
-        RaycastHit bestHit = new RaycastHit();
-        bool found = false;
-        float minDst = float.MaxValue;
-
-        foreach (var hit in hits)
+        // Eğer hedef varsa hareket et, yoksa bekle
+        if (currentTarget != null)
         {
-            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
-            if (hit.collider.isTrigger) continue;
-
-            if (hit.distance < minDst)
-            {
-                minDst = hit.distance;
-                bestHit = hit;
-                found = true;
-            }
-        }
-
-        if (found)
-        {
-            Quaternion targetRotation = Quaternion.FromToRotation(transform.up, bestHit.normal) * transform.rotation;
-            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, targetRotation, Time.deltaTime * alignmentSpeed);
-        }
-        else
-        {
-            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, transform.rotation, Time.deltaTime * alignmentSpeed);
+            MoveToTarget();
         }
     }
 
     private void FindBestTarget()
     {
-        // Aday Hedefleri Belirle
-        System.Collections.Generic.List<Transform> candidates = new System.Collections.Generic.List<Transform>();
+        Collider[] hits = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
         
-        // 1. Yerel Arama (Aggro Range)
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
-        foreach (var hit in hitColliders)
+        Transform bestTarget = null;
+        float bestScore = float.MaxValue; // Puan ne kadar düşükse o kadar iyi (Mesafe temelli)
+
+        foreach (var hit in hits)
         {
-            if (hit.transform == transform) continue;
-            if (hit.GetComponentInParent<PlayerController>() != null || hit.GetComponentInParent<UnitMovement>() != null)
+            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+
+            var damageable = hit.GetComponentInParent<IDamageable>();
+            if (damageable != null)
             {
-                candidates.Add(hit.transform);
+                Transform candidate = hit.transform;
+                if (hit.GetComponentInParent<NetworkBehaviour>() != null)
+                    candidate = hit.GetComponentInParent<NetworkBehaviour>().transform;
+                
+                // --- SCORING SYSTEM (Advanced) ---
+                float dist = Vector3.Distance(transform.position, candidate.position);
+                
+                // 1. "Kişilik" Faktörü: Biraz rastgelelik (Gürültü artırıldı)
+                float randomNoise = Random.Range(-5f, 5f);
+                
+                // 2. Rol Önceliği: Player'a saldırmasın, askere saldırsın
+                // (Player'a +2 metre ceza puanı - Önceden 10du, şimdi daha agresifler)
+                float roleBias = 0f;
+                if (candidate.GetComponent<PlayerController>() != null || candidate.GetComponentInParent<PlayerController>() != null) 
+                    roleBias = 2f; 
+
+                // 3. Kalabalık Cezası: Hedefin etrafı çok kalabalıksa başka hedefe git
+                float crowdPenalty = 0f;
+                // Performans için sadece çok yakındakilere bak (2 metre)
+                // Physics.OverlapSphere pahalı olabilir, bu yüzden basit bir kontrol:
+                // Şimdilik raycast veya count yerine basit bırakalım, user snippet'i OverlapSphere kullanıyordu ama nested olması tehlikeli.
+                // Yine de user isteği üzerine ekliyorum ama optimize edip (LayerMask ile):
+                Collider[] admirers = Physics.OverlapSphere(candidate.position, 2.0f, 1 << gameObject.layer); // Sadece düşmanlara bak
+                if (admirers.Length > 2) crowdPenalty = (admirers.Length - 1) * 2.0f;
+
+                // 4. Sadakat (Sticky): Eğer bu zaten benim hedefimse puanını düşür (Öncelik ver)
+                float stickinessBonus = (candidate == currentTarget) ? -2.0f : 0f;
+
+                float score = dist + randomNoise + roleBias + crowdPenalty + stickinessBonus;
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = candidate;
+                }
             }
         }
 
-        // 2. Global Arama (Eğer kimse yoksa)
-        if (candidates.Count == 0)
+        currentTarget = bestTarget;
+        // DIAGNOSTIC LOG (3-4 saniyede bir)
+        if (Time.frameCount % 200 == 0) // Tek bir düşman için değil hepsi için, ama spam olmasın diye seyrek
         {
-            foreach (var p in FindObjectsByType<PlayerController>(FindObjectsSortMode.None)) candidates.Add(p.transform);
-            foreach (var u in FindObjectsByType<UnitMovement>(FindObjectsSortMode.None)) candidates.Add(u.transform);
+            string status = currentTarget != null ? $"Dist: {bestScore:F1}" : "NO TARGET"; // Changed closestDist to bestScore
+            string navStatus = agent.enabled ? (agent.hasPath ? "Moving" : "Idle") : "DISABLED";
+            // Sadece ilk 1-2 düşman log atsın (Adı 'Tier...' veya 'Clone' ile bitenler)
+            if(Random.value < 0.1f) 
+                Debug.Log($"[AI STATUS] {name} | Targets in Range: {hits.Length} | Target: {currentTarget?.name ?? "None"} | Nav: {navStatus} | LayerMask: {targetLayers.value}");
         }
-
-        if (candidates.Count == 0) return;
-
-        // 3. Organik Hedef Seçimi (Mesafe + Rastgelelik)
-        Transform bestCandidate = null;
-        float bestScore = float.MaxValue;
-
-        foreach (var candidate in candidates)
-        {
-            if (candidate == null) continue;
-            
-            float dist = Vector3.Distance(transform.position, candidate.position);
-            
-            // "Kişilik" Faktörü: Her düşman, hedeflere biraz farklı gözle bakar.
-            // Mesafeye -5 ile +5 arasında rastgele bir "Gürültü" ekliyoruz.
-            // Böylece hepsi matematiksel olarak en yakındaki TEK kişiye saldırmaz, dağılırlar.
-            // "Kişilik" Faktörü: Biraz çeşitlilik olsun ama saçmalamasınlar
-            float randomNoise = Random.Range(-1f, 1f);
-            
-            float roleBias = 0f;
-            if (candidate.GetComponentInParent<PlayerController>() != null) roleBias = 10f; // +10 metre ceza
-
-            // (New) Kalabalık Cezası: Eğer hedefin etrafında çok düşman varsa, başka hedefe git
-            float crowdPenalty = 0f;
-            Collider[] admirers = Physics.OverlapSphere(candidate.position, 2.0f);
-            int allyCount = 0;
-            foreach(var col in admirers)
-            {
-                if (col.GetComponent<EnemyAI>() != null) allyCount++;
-            }
-            if (allyCount > 2) crowdPenalty = allyCount * 2.0f; // Her fazladan dost için +2 metre ceza (Uzaklaş)
-
-            float score = dist + randomNoise + roleBias + crowdPenalty;
-
-            // Mevcut hedefe sadakat (Sticky)
-            // Eğer bu aday zaten benim hedefimse, puanını biraz düşür (daha cazip kıl) ki zırt pırt hedef değiştirmesin.
-            if (candidate == currentTarget)
-            {
-                score -= 3f; 
-            }
-
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestCandidate = candidate;
-            }
-        }
-
-        currentTarget = bestCandidate;
     }
+
+
 
     private void MoveToTarget()
     {
-        if (currentTarget == null) return;
+        if (currentTarget == null) 
+        {
+            name = "Enemy_Idle_NoTarget";
+            return;
+        }
 
         if (!agent.isOnNavMesh) return;
 
@@ -333,6 +323,7 @@ public class EnemyAI : NetworkBehaviour
             // Eğer saldırı menzilindeysek DUR ve SIK
             if (dist <= attackRange)
             {
+                name = $"Enemy_RangedAttack_>{currentTarget.name}";
                 agent.isStopped = true;
                 
                 // Hedefe Dön (LookAt) - Sadece Y ekseninde
@@ -357,6 +348,7 @@ public class EnemyAI : NetworkBehaviour
 
             if (dist <= attackRange)
             {
+                name = $"Enemy_MeleeAttack_>{currentTarget.name}";
                 // Menzildeyiz: Dur, Dön ve Saldır
                 agent.isStopped = true;
                 agent.updateRotation = false; // NavMesh dönmesin, biz döndüreceğiz
@@ -370,6 +362,7 @@ public class EnemyAI : NetworkBehaviour
             }
             else
             {
+                name = $"Enemy_Chasing_>{currentTarget.name}";
                 // Menzil dışındayız: Koş
                 agent.isStopped = false;
                 agent.updateRotation = true;

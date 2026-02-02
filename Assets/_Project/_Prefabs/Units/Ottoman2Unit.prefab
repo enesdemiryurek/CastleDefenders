@@ -308,6 +308,9 @@ PrefabInstance:
       addedObject: {fileID: 765417522382043408}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
       insertIndex: -1
+      addedObject: {fileID: -2310775663690484449}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 5150335227836989443}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 117c639e71776564b80fd82da7b6e80a, type: 3}
       insertIndex: -1
@@ -388,6 +391,28 @@ MonoBehaviour:
   alignmentSpeed: 10
   SquadIndex: 0
   rotationSpeed: 5
+--- !u!114 &-2310775663690484449
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1265527873354341447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e1defe8bd1291441a52c286d8b69d68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  blockChance: 30
+  damageReductionPercent: 50
+  blockAngle: 120
+  networkAnimator: {fileID: 5150335227836989443}
+  animator: {fileID: 5493250927964560519}
+  blockTrigger: Block
+  blockSound: {fileID: 0}
 --- !u!114 &5150335227836989443
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -521,6 +546,7 @@ MonoBehaviour:
   attackParams:
   - Attack
   - Attack1
+  - Attack2
   dieParam: Die
   hitParam: Hit
 --- !u!136 &5133658839156254024

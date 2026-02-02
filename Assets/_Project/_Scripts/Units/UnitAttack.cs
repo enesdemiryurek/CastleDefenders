@@ -34,12 +34,20 @@ public class UnitAttack : NetworkBehaviour
         }
     }
 
+    private float searchInterval = 0.2f;
+    private float lastSearchTime;
+
     private void Update()
     {
         if (isDead) return;
         if (!NetworkServer.active) return;
 
-        TryAttackNearestEnemy();
+        // Performans Optimization: Her frame yerine saniyede 5 kez (0.2s) ara
+        if (Time.time - lastSearchTime >= searchInterval)
+        {
+            lastSearchTime = Time.time;
+            TryAttackNearestEnemy();
+        }
     }
 
     private void TryAttackNearestEnemy()
