@@ -51,7 +51,7 @@ public class UnitMovement : NetworkBehaviour
 
         // 4. Varsayılan State
         currentState = UnitState.Guarding;
-        guardPosition = transform.position;
+        guardPosition = transform.position; // SnapToGround'dan sonra al ki kayma yapmasın
     }
 
     private IEnumerator TryRegisterCommander()
@@ -77,10 +77,7 @@ public class UnitMovement : NetworkBehaviour
     {
         // 1. Önce Dur ve Bağır (Anlık)
         if(agent.isOnNavMesh) agent.isStopped = true;
-        currentState = UnitState.Idle; 
-
-        // Debug
-        // Debug.Log($"[Unit {netId}] HÜCUM EMRİ ALINDI!");
+        currentState = UnitState.Idle; // Animasyon oynarken hareket etmesin
 
         NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
         if (netAnim != null) netAnim.SetTrigger("Charge");
@@ -89,7 +86,9 @@ public class UnitMovement : NetworkBehaviour
         yield return new WaitForSeconds(chargeWindup);
 
         // 3. Saldır!
-        currentState = UnitState.Charging;
+        if (netAnim != null) netAnim.ResetTrigger("Charge"); // Animasyon takılı kalmasın
+        chargingWindupActive = false; // Kilidi aç
+        currentState = UnitState.Charging; // Tekrar Charge moda al
         currentTarget = null; 
         if(agent.isOnNavMesh) agent.isStopped = false;
         
@@ -106,6 +105,7 @@ public class UnitMovement : NetworkBehaviour
     private UnitAttack attacker;
     private Transform currentTarget;
     private Vector3? guardPosition = null;
+    private Quaternion? guardRotation = null;
 
     private Coroutine chargeRoutine;
     private bool isCharging;
@@ -130,8 +130,6 @@ public class UnitMovement : NetworkBehaviour
         if (rootAnim == null) rootAnim = GetComponentInChildren<Animator>();
         if (rootAnim != null) rootAnim.applyRootMotion = false;
     }
-
-
 
 
     
@@ -168,12 +166,9 @@ public class UnitMovement : NetworkBehaviour
         Debug.Log($"[Server] Unit Moving To: {position}");
         currentState = UnitState.Moving; 
         guardPosition = position;
+        guardRotation = lookRotation; // Rotasyonu kaydet
         currentTarget = null; 
         
-        if (lookRotation.HasValue)
-        {
-            // İsteğe bağlı rotasyon eklenebilir
-        }
         TrySetDestination(position);
     }
 
@@ -181,9 +176,10 @@ public class UnitMovement : NetworkBehaviour
     public void StartCharging()
     {
         Debug.Log("[Server] Unit START CHARGING!");
-        currentState = UnitState.Charging;
+        currentState = UnitState.Charging; // Mantıken Charging de kalsın ama Routine onu Idle'a çekecek
         currentTarget = null;
         isCharging = true;
+        chargingWindupActive = true; // KİLİDİ AKTİF ET
 
         if (chargeRoutine != null) StopCoroutine(chargeRoutine);
         chargeRoutine = StartCoroutine(ChargeRoutine());
@@ -277,21 +273,26 @@ public class UnitMovement : NetworkBehaviour
         // Eğer zaten bir hedefimiz varsa, menzilden çıktı mı kontrol et
         if (currentTarget != null)
         {
-            float dist = Vector3.Distance(transform.position, currentTarget.position);
-            if (dist > guardRange * 1.5f) // Çok uzaklaştı, bırak
+            float distToTarget = Vector3.Distance(transform.position, currentTarget.position);
+            
+            // Eğer hedef çok uzaklaştıysa veya öldüyse bırak
+            if (distToTarget > guardRange || !currentTarget.gameObject.activeInHierarchy)
             {
                 currentTarget = null;
-                ReturnToPost();
+                // ReturnToPost(); // Gerek yok, zaten yerindeyiz (hareket etmiyoruz)
             }
             else
             {
+                // Menzildeyse VUR, değilse BEKLE (Hareket Etme!)
                 EngageTarget(currentTarget);
                 return;
             }
         }
 
-        // Yeni Hedef Ara (Sadece yakındakiler)
-        Transform found = AcquireTarget(guardRange);
+        // Yeni Hedef Ara (Sadece Vurabileceği mesafedekiler - Dizilişi bozmamak için)
+        // Stand Your Ground: Sadece attackRange içindekilere saldır, uzaktakine gitme.
+        Transform found = AcquireTarget(guardRange); // Geniş ara, ama EngageTarget gitmeyecek.
+        
         if (found != null)
         {
             currentTarget = found;
@@ -299,7 +300,14 @@ public class UnitMovement : NetworkBehaviour
         }
         else
         {
+            // Hedef yoksa, pozisyonun biraz kaydıysa düzelt (Micro-correction)
             ReturnToPost();
+            
+            // Rotasyonu Koru (Formation Facing - Enemy yoksa öne bak)
+            if (guardRotation.HasValue && Vector3.Distance(transform.position, guardPosition.Value) < 0.5f)
+            {
+                 transform.rotation = Quaternion.Slerp(transform.rotation, guardRotation.Value, Time.deltaTime * 5f);
+            }
         }
     }
 
@@ -315,7 +323,8 @@ public class UnitMovement : NetworkBehaviour
         if (currentTarget == null || (currentTarget != null && !currentTarget.gameObject.activeInHierarchy))
         {
              // AcquireTarget hem BattleManager'a hem de Fiziksel (OverlapSphere) aramaya bakar.
-             currentTarget = AcquireTarget(chargeAggroRange);
+             // HÜCUM MODUNDA: Menzil Sınırsız Olsun (Global Attack)
+             currentTarget = AcquireTarget(float.MaxValue);
         }
         
         // DEBUG: Hedef Durumu
@@ -370,6 +379,12 @@ public class UnitMovement : NetworkBehaviour
         {
             StopMovement();
             currentState = UnitState.Guarding; // Nöbete başla
+            
+            // Hemen dönmeye başla (Manuel Rotation)
+            if (guardRotation.HasValue) 
+            {
+                transform.rotation = guardRotation.Value; // Anlık düzeltme (veya Lerp ile yapılabilir)
+            }
         }
         else
         {
@@ -447,7 +462,17 @@ public class UnitMovement : NetworkBehaviour
         else
         {
             // Yaklaş
-            MoveToTarget(target);
+            // STAND YOUR GROUND: Eğer Guarding modundaysak ASLA hareket etme!
+            if (currentState != UnitState.Guarding)
+            {
+                MoveToTarget(target);
+            }
+            else
+            {
+                 // Eğer Guarding ise ve menzilde değilse, sadece dönüp bakabilir (Opsiyonel)
+                 // transform.LookAt(target); // Şimdilik kapalı, formasyonu bozmasın
+                 StopMovement();
+            }
         }
     }
 
@@ -476,6 +501,12 @@ public class UnitMovement : NetworkBehaviour
             else
             {
                 StopMovement(); // Yerine geldi, bekle
+                
+                // Rotasyonu Koru (Formation Facing)
+                if (guardRotation.HasValue)
+                {
+                     transform.rotation = Quaternion.Slerp(transform.rotation, guardRotation.Value, Time.deltaTime * 5f);
+                }
             }
         }
     }

@@ -360,6 +360,19 @@ public class PlayerUnitCommander : NetworkBehaviour
         }
     }
 
+    [Server]
+    public void ServerSetFollowing(int squadIndex, bool state)
+    {
+        if (state)
+        {
+            if (!followingSquads.Contains(squadIndex)) followingSquads.Add(squadIndex);
+        }
+        else
+        {
+            if (followingSquads.Contains(squadIndex)) followingSquads.Remove(squadIndex);
+        }
+    }
+
     [Command]
     private void CmdStartFollowing(int squadIndex)
     {
