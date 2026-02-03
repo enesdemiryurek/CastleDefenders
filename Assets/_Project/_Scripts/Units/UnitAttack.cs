@@ -5,106 +5,101 @@ using UnityEngine.AI;
 public class UnitAttack : NetworkBehaviour
 {
     [Header("Combat Settings")]
-    [SerializeField] private float attackRange = 2f;
     [SerializeField] private int damage = 15;
-    [SerializeField] private float attackCooldown = 1.0f;
-    [SerializeField] private LayerMask enemyLayer;
+    [Header("Settings")]
+    [SerializeField] private float attackRange = 4.0f; // Menzil Artırıldı (Eski: 2.0f)
+    [SerializeField] private float attackCooldown = 1.5f;
+    
     [Header("Ranged Settings")]
     [SerializeField] private bool isRanged = false;
     [SerializeField] private GameObject projectilePrefab;
     [SerializeField] private Transform projectileSpawnPoint;
 
-    private NavMeshAgent agent;
     private float lastAttackTime;
-    private bool isDead = false;
+    
+    public float GetRange() => attackRange;
+    public void TryAttack(Transform target) => Attack(target.GetComponent<IDamageable>());
+    
+    // Logic Component Reference (The Brain)
+    private UnitMovement movement;
 
     private void Awake()
     {
-        agent = GetComponent<NavMeshAgent>();
-        
-        Health health = GetComponent<Health>();
-        if (health != null)
-        {
-            health.OnDeath += () => 
-            {
-                 isDead = true; 
-                 StopAllCoroutines(); // Saldırıları durdur
-                 CancelInvoke();
-            };
-        }
+        movement = GetComponent<UnitMovement>();
     }
 
-    private float searchInterval = 0.2f;
-    private float lastSearchTime;
-
-    private void Update()
+    public bool CanAttack()
     {
-        if (isDead) return;
-        if (!NetworkServer.active) return;
-
-        // Performans Optimization: Her frame yerine saniyede 5 kez (0.2s) ara
-        if (Time.time - lastSearchTime >= searchInterval)
-        {
-            lastSearchTime = Time.time;
-            TryAttackNearestEnemy();
-        }
+        return Time.time - lastAttackTime >= attackCooldown;
     }
 
-    private void TryAttackNearestEnemy()
+    [Server]
+    public void Attack(IDamageable target)
     {
-        // 1. Etraftaki Düşmanları Ara
-        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange, enemyLayer);
-        
-        foreach (var hit in hits)
-        {
-            IDamageable target = hit.GetComponent<IDamageable>();
-            
-            // Eğer Canlı ve Düşmansa
-            if (target != null && hit.GetComponent<EnemyAI>() != null)
-            {
-                Attack(target);
-                return; // En yakındakine vurup döngüden çık
-            }
-        }
-    }
-
-    public event System.Action OnAttack;
-
-    private void Attack(IDamageable target)
-    {
-        if (Time.time - lastAttackTime < attackCooldown) return;
-
+        if (!CanAttack()) return;
         lastAttackTime = Time.time;
-        
-        // 1. Hedefe Dön (LookAt)
+
+        // 1. Durdur & Dön (Hareket varsa)
         if (target is MonoBehaviour targetMono)
         {
+            // Yüzünü hedefe dön
             Vector3 lookPos = targetMono.transform.position;
             lookPos.y = transform.position.y;
             transform.LookAt(lookPos);
         }
 
-        // 2. Durdur (Animasyon bitene kadar)
-        if (agent != null && agent.enabled)
-        {
-            agent.isStopped = true;
-            // Menzilli ise biraz daha hızlı toparlayabilir veya animasyona göre ayarlanır
-            Invoke(nameof(ResumeMovement), 0.75f); 
-        }
+        // 2. Event Tetikle (Animasyon başlasın)
+        // UnitMovement üzerinden senkronize etmek daha doğrudur ama 
+        // burası sadece execution olduğu için NetworkAnimator kullanabiliriz.
+        TriggerAttackAnimation();
 
-        // 3. Event Tetikle (Animasyon başlasın)
-        OnAttack?.Invoke();
-
-        // 4. Saldırı Türüne Göre İşlem (GECİKMELİ)
-        // Animasyonun "Shoot" noktasına gelmesi için azıcık bekleyip oku fırlatalım
+        // 3. Hasar veya Mermi (Gecikmeli)
         if (isRanged)
         {
             StartCoroutine(SpawnProjectileDelayed(target, 0.4f)); 
         }
         else
         {
-            // Melee için direkt hasar (veya buraya da gecikme eklenebilir)
-            target.TakeDamage(damage, transform.position);
+            // Melee: Direkt hasar ama animasyonun "Vurma" anına denk gelmeli (0.5s gibi)
+            StartCoroutine(DealMeleeDamageDelayed(target, 0.5f));
+        }
+    }
+
+    private void TriggerAttackAnimation()
+    {
+        TriggerAnimation("Attack");
+
+        // Event Tetikle (AnimationController için)
+        OnAttack?.Invoke();
+    }
+
+    // Genel amaçlı animasyon tetikleyicisi (NetworkAnimator varsa onu tercih eder)
+    public void TriggerAnimation(string triggerName)
+    {
+        if (string.IsNullOrWhiteSpace(triggerName)) return;
+
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger(triggerName);
+        else
+        {
+            Animator anim = GetComponent<Animator>();
+            if (anim != null) anim.SetTrigger(triggerName);
+        }
+    }
+    
+    // AnimationController'ın dinlemesi için event
+    public event System.Action OnAttack;
+
+    private System.Collections.IEnumerator DealMeleeDamageDelayed(IDamageable target, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (target != null && target is MonoBehaviour targetMono && targetMono != null) // Hala hayatta mı?
+        {
+            // Mesafe kontrolü (Vururken kaçtı mı?)
+            if (Vector3.Distance(transform.position, targetMono.transform.position) <= 3.5f)
+            {
+                target.TakeDamage(damage, transform.position);
+            }
         }
     }
 
@@ -114,22 +109,17 @@ public class UnitAttack : NetworkBehaviour
 
         if (target != null && projectilePrefab != null && projectileSpawnPoint != null)
         {
-            // Hedef hala yaşıyor mu kontrol et (MonoBehaviour ise)
             if (target is MonoBehaviour targetMono && targetMono != null)
             {
                 GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
                 NetworkServer.Spawn(proj);
 
-                // Hedef Pozisyonu + Sapma (Realizm)
                 Vector3 targetPos = targetMono.transform.position;
-                
-                 // Hafif rastgelelik ekle (Tam 12'den vurmasınlar)
-                float accuracy = 1.0f; // Sapma miktarı (metre)
+                float accuracy = 1.0f; 
                 Vector3 spread = Random.insideUnitSphere * accuracy;
-                spread.y = 0; // Yüksekliği çok bozma
+                spread.y = 0; 
                 targetPos += spread;
 
-                // Projectile'i Fırlat
                 BallisticProjectile bp = proj.GetComponent<BallisticProjectile>();
                 if (bp != null)
                 {
@@ -137,19 +127,5 @@ public class UnitAttack : NetworkBehaviour
                 }
             }
         }
-    }
-
-    private void ResumeMovement()
-    {
-        if (agent != null && agent.enabled && agent.isOnNavMesh)
-        {
-            agent.isStopped = false;
-        }
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = isRanged ? Color.cyan : Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
     }
 }

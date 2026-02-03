@@ -1,364 +1,538 @@
+using System.Collections;
 using Mirror;
 using UnityEngine;
 using UnityEngine.AI;
 
 [RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(UnitAttack))] // "Kas" sistemi zorunlu
 public class UnitMovement : NetworkBehaviour
 {
-    [Header("Charge Settings")]
-    [SerializeField] private float detectionRadius = 5000f; // Bannerlord Style: GERÇEKTEN tüm harita (Physics Optimized)
-    [SerializeField] private LayerMask enemyLayer;
-    [SerializeField] private float updateInterval = 0.5f;
+    public enum UnitState { Idle, Guarding, Chasing, Charging, Moving }
 
-    private NavMeshAgent agent;
-    private bool isCharging = false;
-    private float lastUpdateTime;
-
-    [Header("Visual Settings")]
-    [SerializeField] private float terrainHeightCorrection = 0f; // Bake ile çözüldü, default 0
-    [SerializeField] private Transform modelTransform; // Görsel modelin (Child) referansı
-    [SerializeField] private LayerMask groundLayer = -1; // Default: Everything
-    [SerializeField] private float alignmentSpeed = 10f;
-
+    [Header("State Info")]
+    [SyncVar] public UnitState currentState = UnitState.Idle;
     [SyncVar] public int SquadIndex;
 
-    private bool isDead = false;
+    [Header("Settings")]
+    [SerializeField] private float guardRange = 10f; // Savunmadayken ne kadar uzağa baksın?
+    [SerializeField] private float updateInterval = 0.25f; // Saniyede 4 kez karar ver
+
+    [Header("Targeting")]
+    [SerializeField] private LayerMask enemyLayerMask = -1; 
+    [SerializeField] private float chargeAggroRange = 500f; 
+    [SerializeField] private float chargeWindup = 1.0f; // Geri geldi (1 saniye)
+    [SerializeField] private string chargeTriggerName = "Charge";
+
+    // ... (Aradaki kodlar) ...
+
+    [Server]
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+
+        // 1. ZEMİN FIX
+        if(agent != null) agent.baseOffset = 0f; 
+        SnapToGround();
+        
+        // 2. NAVMESH AYARLARI
+        if (agent != null)
+        {
+            agent.acceleration = 20f; 
+            agent.angularSpeed = 2000f; 
+            agent.autoBraking = false; 
+            agent.stoppingDistance = 1.0f;
+        }
+
+        // 3. KAYITLAR
+        if (BattleManager.Instance != null) BattleManager.Instance.RegisterPlayerUnit(this);
+
+        // Komutanı Bulma (Tekrar eden döngü ile - Race Condition Fix)
+        StartCoroutine(TryRegisterCommander());
+
+        // 4. Varsayılan State
+        currentState = UnitState.Guarding;
+        guardPosition = transform.position;
+    }
+
+    private IEnumerator TryRegisterCommander()
+    {
+        // 10 saniye boyunca komutanı ara
+        for (int i = 0; i < 20; i++) 
+        {
+            PlayerUnitCommander commander = FindFirstObjectByType<PlayerUnitCommander>();
+            if (commander != null)
+            {
+                commander.RegisterUnit(this);
+                // Debug.Log($"[Unit {netId}] Komutan bulundu ve kayıt olundu!");
+                yield break; // Bulduk, çık
+            }
+            yield return new WaitForSeconds(0.5f);
+        }
+        Debug.LogWarning($"[Unit {netId}] Komutan BULUNAMADI! (20 saniye denendi)");
+    }
+
+    // ... (Aradaki kodlar değişmedi)
+
+    private IEnumerator ChargeRoutine()
+    {
+        // 1. Önce Dur ve Bağır (Anlık)
+        if(agent.isOnNavMesh) agent.isStopped = true;
+        currentState = UnitState.Idle; 
+
+        // Debug
+        // Debug.Log($"[Unit {netId}] HÜCUM EMRİ ALINDI!");
+
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger("Charge");
+
+        // 2. Bekleme (1 Saniye - User Request)
+        yield return new WaitForSeconds(chargeWindup);
+
+        // 3. Saldır!
+        currentState = UnitState.Charging;
+        currentTarget = null; 
+        if(agent.isOnNavMesh) agent.isStopped = false;
+        
+        Debug.Log($"[Unit {netId}] HÜCUM BAŞLADI!");
+    }
+
+    [Header("Visual")]
+    [SerializeField] private Transform modelTransform;
+    [SerializeField] private LayerMask groundLayer = -1;
+    [SerializeField] private float alignmentSpeed = 10f;
+
+    // Components
+    private NavMeshAgent agent;
+    private UnitAttack attacker;
+    private Transform currentTarget;
+    private Vector3? guardPosition = null;
+
+    private Coroutine chargeRoutine;
+    private bool isCharging;
+    private bool chargingWindupActive;
+
+    private float lastDecisionTime;
 
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
-        // agent.baseOffset atamasını kaldırdık çünkü NavMesh Bake işlemiyle çözüldü.
-        // Artık script manuel olarak yüksekliğe müdahale etmeyecek.
+        attacker = GetComponent<UnitAttack>();
 
-        // Eğer model atanmamışsa otomatik bul (Animator'un olduğu obje)
+        // Animator bul (Model düzeltme için)
         if (modelTransform == null)
         {
             Animator anim = GetComponentInChildren<Animator>();
-            if (anim != null && anim.transform != transform)
-            {
-                modelTransform = anim.transform;
-            }
-        }
-        
-        // Health eventine abone ol
-        Health health = GetComponent<Health>();
-        if (health != null)
-        {
-            health.OnDeath += OnDeathHandler;
+            if (anim != null && anim.transform != transform) modelTransform = anim.transform;
         }
 
-        // Kök Hareketi (Root Motion) Sorununu Çöz
-        // Bazı animasyonlar karakteri ileri götürür, bunu NavMeshAgent ile çakışmaması için kapatıyoruz.
+        // Root Motion İptali
         Animator rootAnim = GetComponent<Animator>();
         if (rootAnim == null) rootAnim = GetComponentInChildren<Animator>();
-        if (rootAnim != null) 
-        {
-            rootAnim.applyRootMotion = false;
-        }
+        if (rootAnim != null) rootAnim.applyRootMotion = false;
     }
 
-    private void LateUpdate()
+
+
+
+    
+    [Server]
+    private void SnapToGround()
     {
-        // Modelin "Logic" objesinden uzaklaşmasını engelle (Drift Fix)
-        if (modelTransform != null && !isDead)
+        // 1. Önce fiziksel zemini bul (Havadan aşağı Ray at)
+        Vector3 startPos = transform.position + Vector3.up * 5.0f;
+        
+        if (Physics.Raycast(startPos, Vector3.down, out RaycastHit hit, 100f))
         {
-            Vector3 currentLocal = modelTransform.localPosition;
-            // Sadece Y yüksekliğini koru (varsa), X ve Z her zaman 0 olsun (Tam ortada)
-            if (Mathf.Abs(currentLocal.x) > 0.05f || Mathf.Abs(currentLocal.z) > 0.05f)
+            // 2. Fiziksel zemine en yakın NavMesh noktasını bul
+            if (NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, 5.0f, NavMesh.AllAreas))
             {
-                modelTransform.localPosition = new Vector3(0, currentLocal.y, 0);
+                agent.Warp(navHit.position);
+                agent.enabled = true;
             }
-        }
-    }
-
-    private void OnDestroy()
-    {
-        Health health = GetComponent<Health>();
-        if (health != null)
-        {
-            health.OnDeath -= OnDeathHandler;
-        }
-
-        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
-    }
-
-    private void OnDeathHandler()
-    {
-        isDead = true;
-        
-        if (agent != null)
-        {
-            if (agent.isOnNavMesh)
-            {
-                agent.isStopped = true;
-            }
-            agent.enabled = false; // NavMesh'ten kopar
-        }
-
-        // Animasyon Tetikle
-        Animator anim = GetComponent<Animator>();
-        if (anim != null) anim.SetTrigger("Die");
-        
-        // Network Animator varsa onu da tetikle (Senkronizasyon için)
-        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
-        if (netAnim != null) netAnim.SetTrigger("Die");
-    }
-
-    public override void OnStartServer()
-    {
-        base.OnStartServer();
-        // Savaş Yönetimine Kaydol
-        if (BattleManager.Instance != null) BattleManager.Instance.RegisterPlayerUnit(this);
-        
-        // NavMeshAgent sadece Server'da çalışmalı
-        agent.enabled = true;
-        
-        // Askerler hedefe tam sıfır noktasına gitmeye çalışırken titremesin/dönmesin
-        agent.stoppingDistance = 1.5f; 
-        agent.autoBraking = true;
-    }
-
-
-
-    private void AlignModelToGround()
-    {
-        if (modelTransform == null) return;
-
-        // Player'ın biraz yukarısından aşağı ray at
-        Ray ray = new Ray(transform.position + Vector3.up, Vector3.down);
-        
-        // RaycastAll kullanarak kendimize çarpma durumunu engelliyoruz
-        RaycastHit[] hits = Physics.RaycastAll(ray, 3f, groundLayer);
-        
-        RaycastHit bestHit = new RaycastHit();
-        bool found = false;
-        float minDst = float.MaxValue;
-
-        foreach (var hit in hits)
-        {
-            // Kendimize veya alt objelerimize çarpıyorsak yoksay
-            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
-            
-            // Trigger'ları yoksay (Opsiyonel ama güvenli)
-            if (hit.collider.isTrigger) continue;
-
-            if (hit.distance < minDst)
-            {
-                minDst = hit.distance;
-                bestHit = hit;
-                found = true;
-            }
-        }
-
-        if (found)
-        {
-            // Zeminin normaline göre hedef rotasyon
-            Quaternion targetRotation = Quaternion.FromToRotation(transform.up, bestHit.normal) * transform.rotation;
-            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, targetRotation, Time.deltaTime * alignmentSpeed);
         }
         else
         {
-            // Zemin bulunamazsa varsayılan dik duruşa yavaşça dön
-            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, transform.rotation, Time.deltaTime * alignmentSpeed);
+             // Fallback
+             if (NavMesh.SamplePosition(transform.position, out NavMeshHit navHit2, 20.0f, NavMesh.AllAreas))
+             {
+                 agent.Warp(navHit2.position);
+             }
         }
     }
 
-    private float lastGlobalSearchTime;
-    private const float GLOBAL_SEARCH_INTERVAL = 3.0f;
+    // --- Actions ---
 
-
-
-    private Transform FindNearestEnemy()
+    [Server]
+    public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false)
     {
-        // TARGETİNG SYSTEM 3.0 (BattleManager)
-        // Artık fizik kullanmıyoruz. Savaş meydanındaki herkesi bilen yöneticiye soruyoruz.
-        if (BattleManager.Instance == null) return null;
-
-        return BattleManager.Instance.GetNearestEnemyForUnit(transform.position);
+        Debug.Log($"[Server] Unit Moving To: {position}");
+        currentState = UnitState.Moving; 
+        guardPosition = position;
+        currentTarget = null; 
+        
+        if (lookRotation.HasValue)
+        {
+            // İsteğe bağlı rotasyon eklenebilir
+        }
+        TrySetDestination(position);
     }
 
     [Server]
     public void StartCharging()
     {
-        if (isCharging) return; // Zaten saldırıyorsa tekrar bağırmasın
-
-        StartCoroutine(ChargeSequence());
-    }
-
-    private System.Collections.IEnumerator ChargeSequence()
-    {
-        // 0. Hareketi Durdur (Olduğu yerde bağırsın)
-        if(agent.isOnNavMesh) 
-        {
-            agent.isStopped = true;
-            agent.ResetPath(); // Hedefi unut
-        }
-
-        // 1. Animasyonu Tetikle (Server -> Client)
-        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
-        if (netAnim != null) netAnim.SetTrigger("Charge");
-        else 
-        {
-             Animator anim = GetComponent<Animator>();
-             if(anim != null) anim.SetTrigger("Charge");
-        }
-
-        // 2. Gaza Gelme Süresi (Animasyon kadar bekle - 2.2 sn)
-        yield return new WaitForSeconds(2.2f);
-
-        // 3. Hücum Başlasın!
+        Debug.Log("[Server] Unit START CHARGING!");
+        currentState = UnitState.Charging;
+        currentTarget = null;
         isCharging = true;
-        // CRITICAL FIX: Charge başlar başlamaz düşman arasın (Beklemesin)
-        lastUpdateTime = -999f; 
-        
-        if (agent.isOnNavMesh)
-        {
-            agent.isStopped = false;
-        }
+
+        if (chargeRoutine != null) StopCoroutine(chargeRoutine);
+        chargeRoutine = StartCoroutine(ChargeRoutine());
     }
 
     [Server]
     public void StopCharging()
     {
-        isCharging = false;
-        // Hareketi hemen durdurmak istemeyebiliriz (MoveTo çağrılacak), ama clean slate olsun.
+         if (chargeRoutine != null)
+         {
+             StopCoroutine(chargeRoutine);
+             chargeRoutine = null;
+         }
+
+         chargingWindupActive = false;
+            isCharging = false;
+
+         if(currentState == UnitState.Charging) currentState = UnitState.Guarding;
     }
 
-    private Quaternion? targetFacingRotation = null;
-    private bool isShieldWall = false;
-
-    // ... (Previous Update Logic) ...
+    private void OnDestroy()
+    {
+        // Kayıt Silme
+        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
+    }
 
     private void Update()
     {
-        // 1. Görsel Hizalama (Client & Server)
-        // Performans Optimization: Her frame yerine 3 framed'e bir çalışsın
-        if (Time.frameCount % 3 == 0)
-        {
-            AlignModelToGround();
-        }
-        
-        // 2. Sunucu Mantığı (Hareket & Charge)
+        // Sadece Server karar verir
         if (!isServer) return;
 
-        if (isDead) return;
+        // Görsel Düzeltmeler (Herkes için çalışabilir ama logic serverda)
+        AlignModelToGround();
+        UpdateAnimations();
 
-        // Formasyon Yönüne Dönme (Duruyorsa veya hedefe çok yakınsa)
-        if (targetFacingRotation.HasValue && !isCharging)
+        // Karar Mekanizması (Brain)
+        if (Time.time - lastDecisionTime >= updateInterval)
         {
-            float dist = agent.remainingDistance;
-            
-            // Hedefe çok yakınsak kontrolü biz alalım (NavMesh kendi kafasına göre dönmesin)
-            if (dist <= agent.stoppingDistance + 0.5f)
+            lastDecisionTime = Time.time;
+            Think();
+        }
+    }
+
+    [Server]
+    private void Think()
+    {
+        // 1. Hedef Kontrolü (Öldü mü? Kayboldu mu?)
+        if (currentTarget != null)
+        {
+            if (currentTarget.GetComponent<Health>() is Health h && h.CurrentHealth <= 0)
             {
-                agent.updateRotation = false; // NavMesh rotasyonu kapat
-                float step = rotationSpeed * Time.deltaTime * 50f; // Hızlı dön
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetFacingRotation.Value, step);
+                currentTarget = null; // Hedef öldü, yenisini bul
+            }
+            else if (currentTarget.GetComponentInParent<UnitMovement>() != null)
+            {
+                // Dost hedef seçilmişse iptal et
+                currentTarget = null;
+            }
+        }
+
+        // 2. State Machine
+        switch (currentState)
+        {
+            case UnitState.Idle:
+                // Hiçbir şey yapma, bekle.
+                StopMovement();
+                break;
+
+            case UnitState.Guarding:
+                HandleGuarding();
+                break;
+
+            case UnitState.Charging:
+                HandleCharging();
+                break;
+                
+            case UnitState.Chasing:
+                // Guard veya Charge içinden geçiş yapılır, burada sadece takip mantığı
+                if(currentTarget != null) MoveToTarget(currentTarget);
+                else currentState = UnitState.Guarding; // Hedef yoksa nöbete dön
+                break;
+
+            case UnitState.Moving:
+                HandleMoving();
+                break;
+        }
+    }
+
+    private void HandleGuarding()
+    {
+        // Eğer zaten bir hedefimiz varsa, menzilden çıktı mı kontrol et
+        if (currentTarget != null)
+        {
+            float dist = Vector3.Distance(transform.position, currentTarget.position);
+            if (dist > guardRange * 1.5f) // Çok uzaklaştı, bırak
+            {
+                currentTarget = null;
+                ReturnToPost();
             }
             else
             {
-                agent.updateRotation = true; // Yürürken serbest bırak
+                EngageTarget(currentTarget);
+                return;
             }
+        }
+
+        // Yeni Hedef Ara (Sadece yakındakiler)
+        Transform found = AcquireTarget(guardRange);
+        if (found != null)
+        {
+            currentTarget = found;
+            EngageTarget(currentTarget);
         }
         else
         {
-             if (agent != null) agent.updateRotation = true;
+            ReturnToPost();
+        }
+    }
+
+    private void HandleCharging()
+    {
+        if (chargingWindupActive)
+        {
+            StopMovement();
+            return;
         }
 
-        // --- HÜCUM MANTIĞI (Mount & Blade Style) ---
-        if (isCharging)
+        // Hedef Bul (Yoksa veya Ödüyse)
+        if (currentTarget == null || (currentTarget != null && !currentTarget.gameObject.activeInHierarchy))
         {
-             // Periyodik hedef güncelleme (Sürekli Find yapmak pahalıdır)
-             if (Time.time - lastUpdateTime >= updateInterval)
-             {
-                 lastUpdateTime = Time.time;
-
-                 Transform target = FindNearestEnemy();
-                 if (target != null)
-                 {
-                     if (agent.isOnNavMesh)
-                     {
-                         agent.stoppingDistance = 1.0f; // Düşmanın dibine gir
-                         agent.SetDestination(target.position);
-                         agent.isStopped = false;
-                     }
-                     
-                     // Hedefe yaklaştıysak saldırı moduna geç (UnitAttack scripti varsa)
-                     float dist = Vector3.Distance(transform.position, target.position);
-                     if (dist <= 1.5f) // Saldırı menzili
-                     {
-                         // Yüzünü dön
-                         Vector3 lookPos = target.position; 
-                         lookPos.y = transform.position.y;
-                         transform.LookAt(lookPos);
-                     }
-                 }
-                 else
-                 {
-                     // Düşman yoksa olduğun yerde bekle (veya devriye gez - şimdilik bekle)
-                     if (agent.isOnNavMesh) agent.isStopped = true;
-                 }
-             }
+             // AcquireTarget hem BattleManager'a hem de Fiziksel (OverlapSphere) aramaya bakar.
+             currentTarget = AcquireTarget(chargeAggroRange);
         }
         
-        // Animasyon Hızı Güncelle (Idle'a geçmesi için)
+        // DEBUG: Hedef Durumu
+        if (currentTarget == null)
+        {
+            // Hedef Bulunamadı -> Dur
+            if(agent.isOnNavMesh) agent.isStopped = true;
+            
+            // Sık log atmamak için 60 frame'de bir uyar
+            if(Time.frameCount % 60 == 0) Debug.LogWarning($"[Unit {netId}] Charge Modunda ama HEDEF BULAMIYOR! (BattleManager döndürmedi)");
+        }
+        else
+        {
+            // Hedefe Git
+            float dist = Vector3.Distance(transform.position, currentTarget.position);
+            float range = attacker.GetRange();
+
+            if (dist <= range)
+            {
+                // Vur
+                if(agent.isOnNavMesh) agent.isStopped = true;
+                attacker.TryAttack(currentTarget);
+            }
+            else
+            {
+                // Yaklaş
+                if(agent.isOnNavMesh) 
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(currentTarget.position);
+                }
+            }
+        }
+        
+        // DEBUG: NavMesh durumunu kontrol et
+        if(!agent.isOnNavMesh && Time.frameCount % 60 == 0) Debug.LogWarning($"[Unit {netId}] NavMesh üzerinde değil!");
+    }
+
+    private void HandleMoving()
+    {
+        // Hedef yoksa Idle
+        if (!guardPosition.HasValue)
+        {
+            StopMovement();
+            currentState = UnitState.Idle;
+            return;
+        }
+
+        // Mesafe Kontrolü
+        float dist = Vector3.Distance(transform.position, guardPosition.Value);
+        if (dist <= 1.0f) // Vardık
+        {
+            StopMovement();
+            currentState = UnitState.Guarding; // Nöbete başla
+        }
+        else
+        {
+            // Yürümeye devam
+            TrySetDestination(guardPosition.Value);
+        }
+    }
+
+    private Transform AcquireTarget(float range)
+    {
+        Transform bestTarget = null;
+        float bestDistance = range;
+
+        if (BattleManager.Instance != null)
+        {
+            Transform bmTarget = BattleManager.Instance.GetNearestEnemyForUnit(transform.position, range);
+            if (bmTarget != null)
+            {
+                bestTarget = bmTarget;
+                bestDistance = Vector3.Distance(transform.position, bmTarget.position);
+            }
+        }
+
+        Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayerMask);
+        EvaluateHitResults(hits, ref bestTarget, ref bestDistance);
+
+        // Eğer maskeden sonuç yoksa, son çare tüm layer'larda ara (dostları yine filtreleyecek)
+        if (bestTarget == null)
+        {
+            Collider[] anyHits = Physics.OverlapSphere(transform.position, range, ~0);
+            EvaluateHitResults(anyHits, ref bestTarget, ref bestDistance);
+        }
+
+        return bestTarget;
+    }
+
+    private void EvaluateHitResults(Collider[] hits, ref Transform bestTarget, ref float bestDistance)
+    {
+        foreach (var hit in hits)
+        {
+            if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+
+            // Arkadaş Kontrolü (Aynı bağlantı/takım ise vurma)
+            UnitMovement otherUnit = hit.GetComponentInParent<UnitMovement>();
+            if (otherUnit != null && otherUnit.connectionToClient == this.connectionToClient) continue; 
+            
+            if (hit.GetComponentInParent<PlayerController>() != null) continue;
+
+            IDamageable damageable = hit.GetComponentInParent<IDamageable>();
+            if (damageable == null) continue;
+
+            NetworkIdentity identity = hit.GetComponentInParent<NetworkIdentity>();
+            Transform candidate = identity != null ? identity.transform : hit.transform;
+
+            float dist = Vector3.Distance(transform.position, candidate.position);
+            if (dist < bestDistance)
+            {
+                bestDistance = dist;
+                bestTarget = candidate;
+            }
+        }
+    }
+
+    private void EngageTarget(Transform target)
+    {
+        float dist = Vector3.Distance(transform.position, target.position);
+        float attackRange = 2.0f; // UnitAttack'tan çekilebilir aslında
+
+        if (dist <= attackRange)
+        {
+            // Vur!
+            StopMovement();
+            attacker.Attack(target.GetComponent<IDamageable>());
+        }
+        else
+        {
+            // Yaklaş
+            MoveToTarget(target);
+        }
+    }
+
+    private void MoveToTarget(Transform target)
+    {
+        TrySetDestination(target.position);
+    }
+
+    private void StopMovement()
+    {
+        if(agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+    }
+
+    private void ReturnToPost()
+    {
+        if (guardPosition.HasValue)
+        {
+            if (Vector3.Distance(transform.position, guardPosition.Value) > 1.0f)
+            {
+                TrySetDestination(guardPosition.Value);
+            }
+            else
+            {
+                StopMovement(); // Yerine geldi, bekle
+            }
+        }
+    }
+
+    // NavMesh hedefi güvenli şekilde ayarla
+    private void TrySetDestination(Vector3 targetPos)
+    {
+        if (agent == null || !agent.enabled) return;
+
+        // Eğer NavMesh'ten düştüyse tekrar warp etmeyi dene
+        if (!agent.isOnNavMesh)
+        {
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit reHit, 10f, NavMesh.AllAreas))
+            {
+                agent.Warp(reHit.position);
+            }
+        }
+
+        // Hedef nokta NavMesh üzerinde mi? Değilse yakındaki geçerli noktaya yaklaştır
+        Vector3 finalPos = targetPos;
+        if (NavMesh.SamplePosition(targetPos, out NavMeshHit destHit, 5f, NavMesh.AllAreas))
+        {
+            finalPos = destHit.position;
+        }
+
+        if (agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.SetDestination(finalPos);
+        }
+    }
+
+    // --- Visuals ---
+
+    private void UpdateAnimations()
+    {
         if (agent != null && agent.isOnNavMesh)
         {
             float speed = agent.velocity.magnitude;
-
-            // Eğer hedefe çok yaklaştıysak (Toleranslı) veya hızı çok düşükse IDLE yap
-            // stoppingDistance (0.1f) + 0.5f = 0.6f tolerans (Kalabalıkta itiş kakışı önlemek için)
-            if ((agent.remainingDistance <= agent.stoppingDistance + 0.5f) && !agent.pathPending)
-            {
-                speed = 0f;
-                // Fiziksel itiş kakışı da durdur ki titremesinler
-                if (!isCharging) agent.isStopped = true; 
-            }
-            // Çok düşük hızları da (sürtünme) yoksay
-            else if (speed < 0.1f)
-            {
-                speed = 0f;
-            }
-
             Animator anim = GetComponent<Animator>();
             if (anim != null) anim.SetFloat("Speed", speed);
         }
     }
 
-    [Server]
-    public void MoveTo(Vector3 targetPosition, Quaternion? lookRotation = null, bool shieldWall = false)
+    private void AlignModelToGround()
     {
-        // Hareket emri gelince charge biter
-        StopCharging();
+        if(modelTransform == null) return;
         
-        targetFacingRotation = lookRotation;
-        isShieldWall = shieldWall;
-
-        // Animator güncelle
-        // Animator anim = GetComponent<Animator>();
-        // if (anim != null) anim.SetBool("ShieldWall", isShieldWall);
-        // User: Animasyon eklemeyelim, Idle zaten kalkanlı duruyor.
-
-        
-        // Network Animator
-        // Network Animator
-        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
-        // Standart Mirror NetworkAnimator'ın "Animator" diye bir property'si yoktur. 
-        // Animator üzerindeki değişiklikleri zaten otomatik algılar (parametre listesindeyse).
-
-
-        if (agent.isOnNavMesh)
+        Ray ray = new Ray(transform.position + Vector3.up, Vector3.down);
+         if (Physics.Raycast(ray, out RaycastHit hit, 3f, groundLayer))
         {
-            agent.stoppingDistance = 0.1f; // Formasyon için tam noktaya gitmeli
-            agent.SetDestination(targetPosition);
-            agent.isStopped = false;
+             Quaternion targetRotation = Quaternion.FromToRotation(transform.up, hit.normal) * transform.rotation;
+             modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, targetRotation, Time.deltaTime * alignmentSpeed);
         }
         else
         {
-            Debug.LogWarning($"Unit {name} is NOT on NavMesh!");
+            modelTransform.rotation = Quaternion.Slerp(modelTransform.rotation, transform.rotation, Time.deltaTime * alignmentSpeed);
         }
     }
-
-    [Header("Rotation Settings")]
-    [SerializeField] private float rotationSpeed = 5f;
 }

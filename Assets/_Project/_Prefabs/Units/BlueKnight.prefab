@@ -345,12 +345,8 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  attackRange: 2
   damage: 15
   attackCooldown: 1
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 8
   isRanged: 0
   projectilePrefab: {fileID: 0}
   projectileSpawnPoint: {fileID: 0}
@@ -434,19 +430,21 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  detectionRadius: 20
-  enemyLayer:
+  currentState: 0
+  SquadIndex: 0
+  guardRange: 10
+  updateInterval: 0.5
+  enemyLayerMask:
     serializedVersion: 2
     m_Bits: 8
-  updateInterval: 0.5
-  terrainHeightCorrection: 0
+  chargeAggroRange: 40
+  chargeWindup: 2
+  chargeTriggerName: Charge
   modelTransform: {fileID: 0}
   groundLayer:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 64
   alignmentSpeed: 10
-  SquadIndex: 0
-  rotationSpeed: 5
 --- !u!136 &2925895181851485125
 CapsuleCollider:
   m_ObjectHideFlags: 0
