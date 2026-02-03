@@ -6,7 +6,7 @@ using UnityEngine.AI;
 public class EnemyAI : NetworkBehaviour
 {
     [Header("AI Settings")]
-    [SerializeField] private float aggroRange = 5000f; // Bannerlord Style: GERÇEKTEN tüm harita (Physics Optimized)
+    [SerializeField] private float aggroRange = 50000f; // Bannerlord Style: GERÇEKTEN tüm harita (30x arttırıldı)
     [SerializeField] private float attackRange = 2f;
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 1.5f;
@@ -196,14 +196,27 @@ public class EnemyAI : NetworkBehaviour
             {
                 Debug.LogError($"[{name}] AI NavMesh bulamadi! (Range: 20f + Raycast)");
             }
+        } // <--- Outer block closing brace
+
+        if(agent != null) 
+        {
+             agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
         }
         
-        if(agent != null) agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
+        // Savaş Yönetimine Kaydol (RESTORED)
+        if (BattleManager.Instance != null) 
+        {
+            BattleManager.Instance.RegisterEnemy(this);
+        }
+        else
+        {
+            Debug.LogError($"[EnemyAI] {name}: BattleManager BULUNAMADI! Düşmanlar sisteme kaydolamıyor.");
+        }
     }
 
     private void Start()
     {
-        // Client/Host senkronizasyonu için backup
+        // ... (Kodu koru)
         if(NetworkServer.active && agent != null && !agent.isOnNavMesh)
         {
              if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
@@ -214,37 +227,52 @@ public class EnemyAI : NetworkBehaviour
         }
     }
 
+    private void OnValidate()
+    {
+        if (aggroRange < 50000f) aggroRange = 50000f;
+    }
+
     private void OnDestroy()
     {
         Health health = GetComponent<Health>();
         if (health != null) health.OnDeath -= OnDeathHandler;
+        
+        if (BattleManager.Instance != null && NetworkServer.active) BattleManager.Instance.UnregisterEnemy(this);
     }
 
     private void Update()
     {
         if (isDead) return;
+        
+        // Animasyon Hızı (Basit)
+        if (animator != null && agent.enabled) animator.SetFloat("Speed", agent.velocity.magnitude);
+
+        // Server-Side Mantık
         if (!agent.enabled) return;
 
-        // Performans Optimization: Her frame hedef arama
-        if (Time.time - lastGlobalSearchTime > 0.5f) // 0.5 saniyede bir ara
+        // Hedef Arama (1 saniyede bir - Yeterli)
+        if (Time.time - lastGlobalSearchTime > 1.0f) 
         {
             lastGlobalSearchTime = Time.time;
             FindBestTarget();
         }
 
-        // Eğer hedef varsa hareket et, yoksa bekle
+        // Hareket
         if (currentTarget != null)
         {
             MoveToTarget();
         }
     }
+    
+    // YENİ: AlignModelToGround KALDIRILDI (Titreme sebebiydi)
 
     private void FindBestTarget()
     {
+        // TARGETING (Simple + Distributed)
         Collider[] hits = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
         
         Transform bestTarget = null;
-        float bestScore = float.MaxValue; // Puan ne kadar düşükse o kadar iyi (Mesafe temelli)
+        float bestScore = float.MaxValue; 
 
         foreach (var hit in hits)
         {
@@ -256,33 +284,24 @@ public class EnemyAI : NetworkBehaviour
                 Transform candidate = hit.transform;
                 if (hit.GetComponentInParent<NetworkBehaviour>() != null)
                     candidate = hit.GetComponentInParent<NetworkBehaviour>().transform;
-                
-                // --- SCORING SYSTEM (Advanced) ---
+
                 float dist = Vector3.Distance(transform.position, candidate.position);
                 
-                // 1. "Kişilik" Faktörü: Biraz rastgelelik (Gürültü artırıldı)
-                float randomNoise = Random.Range(-5f, 5f);
+                // --- DAĞINIK SALDIRI MANTIĞI ---
+                // Sadece en yakınına gitmesinler, biraz rastgele dağılsınlar.
+                // Okçular (Ranged) çok daha rastgele hedefler seçsin (arka safları vursun).
+                // Yakıncılar (Melee) biraz daha toplu kalsın ama yine de yığılmasın.
                 
-                // 2. Rol Önceliği: Player'a saldırmasın, askere saldırsın
-                // (Player'a +2 metre ceza puanı - Önceden 10du, şimdi daha agresifler)
-                float roleBias = 0f;
-                if (candidate.GetComponent<PlayerController>() != null || candidate.GetComponentInParent<PlayerController>() != null) 
-                    roleBias = 2f; 
+                float noiseRange = isRanged ? 20.0f : 5.0f; 
+                float randomBias = Random.Range(0f, noiseRange); // Pozitif sayı ekliyoruz ki uzaktaki "daha uzak" görünsün DEĞİL.
+                // Mantık: Score = Distance + Noise. 
+                // Eğer gürültü negatif olursa uzaktaki yakına gelebilir. Biz 'distribution' istiyoruz.
+                // Doğrusu: Random.Range(-noise, noise).
+                
+                float noise = Random.Range(-noiseRange, noiseRange);
+                float score = dist + noise; 
 
-                // 3. Kalabalık Cezası: Hedefin etrafı çok kalabalıksa başka hedefe git
-                float crowdPenalty = 0f;
-                // Performans için sadece çok yakındakilere bak (2 metre)
-                // Physics.OverlapSphere pahalı olabilir, bu yüzden basit bir kontrol:
-                // Şimdilik raycast veya count yerine basit bırakalım, user snippet'i OverlapSphere kullanıyordu ama nested olması tehlikeli.
-                // Yine de user isteği üzerine ekliyorum ama optimize edip (LayerMask ile):
-                Collider[] admirers = Physics.OverlapSphere(candidate.position, 2.0f, 1 << gameObject.layer); // Sadece düşmanlara bak
-                if (admirers.Length > 2) crowdPenalty = (admirers.Length - 1) * 2.0f;
-
-                // 4. Sadakat (Sticky): Eğer bu zaten benim hedefimse puanını düşür (Öncelik ver)
-                float stickinessBonus = (candidate == currentTarget) ? -2.0f : 0f;
-
-                float score = dist + randomNoise + roleBias + crowdPenalty + stickinessBonus;
-
+                // Skor ne kadar düşükse o kadar "yakın" hissedilir.
                 if (score < bestScore)
                 {
                     bestScore = score;
@@ -292,15 +311,6 @@ public class EnemyAI : NetworkBehaviour
         }
 
         currentTarget = bestTarget;
-        // DIAGNOSTIC LOG (3-4 saniyede bir)
-        if (Time.frameCount % 200 == 0) // Tek bir düşman için değil hepsi için, ama spam olmasın diye seyrek
-        {
-            string status = currentTarget != null ? $"Dist: {bestScore:F1}" : "NO TARGET"; // Changed closestDist to bestScore
-            string navStatus = agent.enabled ? (agent.hasPath ? "Moving" : "Idle") : "DISABLED";
-            // Sadece ilk 1-2 düşman log atsın (Adı 'Tier...' veya 'Clone' ile bitenler)
-            if(Random.value < 0.1f) 
-                Debug.Log($"[AI STATUS] {name} | Targets in Range: {hits.Length} | Target: {currentTarget?.name ?? "None"} | Nav: {navStatus} | LayerMask: {targetLayers.value}");
-        }
     }
 
 

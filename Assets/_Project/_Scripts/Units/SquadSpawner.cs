@@ -8,7 +8,7 @@ public class SquadSpawner : NetworkBehaviour
     [SerializeField] private GameObject[] unitPrefabs; // Artık birden fazla birlik seçebilirsin
     [SerializeField] private int unitCountPerSquad = 10;
     [SerializeField] private float spacing = 1.5f;
-    [SerializeField] private int unitsPerRow = 5;
+    [SerializeField] private int unitsPerRow = 3; // 3'erli Düzgün Sıra
     [SerializeField] private float distanceBetweenSquads = 8.0f; // Birlikler arası mesafe
     [SerializeField] private float maxNavMeshDistance = 5.0f; // NavMesh bulma yarıçapı
 
@@ -62,7 +62,11 @@ public class SquadSpawner : NetworkBehaviour
             return;
         }
 
-        Vector3 startPos = transform.position - (transform.forward * 3f); // Player'ın biraz arkası
+        // DÜZELTME: Player'ın o anki eğiminden etkilenmemek için yön vektörlerini düzleştiriyoruz (XZ Plane)
+        Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        Vector3 flatRight = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
+
+        Vector3 startPos = transform.position - (flatForward * 5f); // Player'ın arkası (5m)
 
         // HER BİR BİRLİK ÇEŞİDİ İÇİN DÖNGÜ
         for (int squadIndex = 0; squadIndex < unitsToSpawn.Length; squadIndex++)
@@ -71,7 +75,7 @@ public class SquadSpawner : NetworkBehaviour
             if (currentPrefab == null) continue;
 
             // Her yeni birlik bir öncekinin biraz daha arkasında dursun
-            Vector3 squadOffset = -(transform.forward * (squadIndex * distanceBetweenSquads)); 
+            Vector3 squadOffset = -(flatForward * (squadIndex * distanceBetweenSquads)); 
             Vector3 currentSquadStartPos = startPos + squadOffset;
 
             for (int i = 0; i < unitCountPerSquad; i++)
@@ -80,7 +84,7 @@ public class SquadSpawner : NetworkBehaviour
                 float xOffset = (i % unitsPerRow) * spacing - ((unitsPerRow * spacing) / 2f);
                 float zOffset = (i / unitsPerRow) * spacing;
 
-                Vector3 spawnPos = currentSquadStartPos + (transform.right * xOffset) - (transform.forward * zOffset);
+                Vector3 spawnPos = currentSquadStartPos + (flatRight * xOffset) - (flatForward * zOffset);
                 
                 // FIX: NavMesh üzerinde geçerli bir nokta bul
                 NavMeshHit hit;
@@ -111,6 +115,12 @@ public class SquadSpawner : NetworkBehaviour
                         commander.RegisterUnit(movement);
                     }
                 }
+            }
+
+            // DOĞDUKLARI GİBİ TAKİPE AL (Komutları benden al)
+            if (commander != null)
+            {
+                commander.ServerSetFollowing(squadIndex, true);
             }
         }
     }
