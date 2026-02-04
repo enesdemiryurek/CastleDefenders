@@ -1,5 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+<<<<<<< Updated upstream
 --- !u!1 &5571191248940148171
 GameObject:
   m_ObjectHideFlags: 0
@@ -31,6 +32,8 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3982736987577273608}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+=======
+>>>>>>> Stashed changes
 --- !u!1001 &2127859844868577223
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -83,16 +86,20 @@ PrefabInstance:
       propertyPath: m_Name
       value: "Arkas\u0131Kalkan"
       objectReference: {fileID: 0}
+<<<<<<< Updated upstream
     - target: {fileID: 5866666021909216657, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
       propertyPath: m_Controller
       value: 
       objectReference: {fileID: 9100000, guid: b94e71103d123654db8e7a404b2f871d, type: 2}
+=======
+>>>>>>> Stashed changes
     - target: {fileID: 8111781155169087978, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 13e24f0139f3216488c74d8aa7cce771, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
+<<<<<<< Updated upstream
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: -6142299176988321073, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
       insertIndex: -1
@@ -458,3 +465,8 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8916903431101433130, guid: 4e57431066b74f74eb8a7f294bc0798f, type: 3}
   m_PrefabInstance: {fileID: 6255163767426103739}
   m_PrefabAsset: {fileID: 0}
+=======
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
+>>>>>>> Stashed changes
