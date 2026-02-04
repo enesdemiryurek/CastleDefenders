@@ -24,6 +24,14 @@ public class BallisticProjectile : NetworkBehaviour
         rb.isKinematic = true; 
     }
 
+    private GameObject shooter;
+
+    [Server]
+    public void SetShooter(GameObject shooterObj)
+    {
+        this.shooter = shooterObj;
+    }
+
     // Server sadece başlatır
     [Server]
     public void Launch(Vector3 targetPosition)
@@ -80,7 +88,17 @@ public class BallisticProjectile : NetworkBehaviour
         if (!isServer) return; // Sadece Server hasar verir
 
         if (collision.gameObject.GetComponent<BallisticProjectile>()) return; // Oka çarpma
-        if (collision.gameObject.GetComponent<EnemyAI>()) return; // Atan kişiye (EnemyAI) çarpma
+        if (collision.gameObject.GetComponent<BallisticProjectile>()) return; // Oka çarpma
+        
+        // Vuran kişiye (shooter) çarpma
+        if (shooter != null && (collision.gameObject == shooter || collision.transform.IsChildOf(shooter.transform))) return;
+
+        // DOST ATEŞİ KORUMASI:
+        // Eğer shooter bir "UnitMovement" ise (Bizim asker), diğer "UnitMovement"lara (Bizim askerler) vurmasın.
+        if (shooter != null && shooter.GetComponent<UnitMovement>() != null && collision.gameObject.GetComponentInParent<UnitMovement>() != null) return;
+        
+        // Eğer shooter bir "EnemyAI" ise, diğer "EnemyAI"lara vurmasın.
+        if (shooter != null && shooter.GetComponent<EnemyAI>() != null && collision.gameObject.GetComponentInParent<EnemyAI>() != null) return;
 
         // IDamageable ara (Kendisinden başlayıp yukarı doğru)
         IDamageable target = collision.gameObject.GetComponentInParent<IDamageable>();
@@ -107,7 +125,14 @@ public class BallisticProjectile : NetworkBehaviour
         if (!isServer) return;
 
         if (other.GetComponent<BallisticProjectile>()) return;
-        if (other.GetComponent<EnemyAI>()) return;
+        if (other.GetComponent<BallisticProjectile>()) return;
+        
+        // Vuran kişiye (shooter) çarpma
+        if (shooter != null && (other.gameObject == shooter || other.transform.IsChildOf(shooter.transform))) return;
+
+        // DOST ATEŞİ KORUMASI:
+        if (shooter != null && shooter.GetComponent<UnitMovement>() != null && other.GetComponentInParent<UnitMovement>() != null) return;
+        if (shooter != null && shooter.GetComponent<EnemyAI>() != null && other.GetComponentInParent<EnemyAI>() != null) return;
 
         IDamageable target = other.GetComponentInParent<IDamageable>();
         if (target != null)

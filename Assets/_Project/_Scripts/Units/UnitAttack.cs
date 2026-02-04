@@ -123,6 +123,7 @@ public class UnitAttack : NetworkBehaviour
                 BallisticProjectile bp = proj.GetComponent<BallisticProjectile>();
                 if (bp != null)
                 {
+                    bp.SetShooter(gameObject); // Vuran biziz
                     bp.Launch(targetPos);
                 }
             }

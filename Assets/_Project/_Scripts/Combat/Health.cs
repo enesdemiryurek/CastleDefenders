@@ -24,6 +24,9 @@ public class Health : NetworkBehaviour, IDamageable
         currentHealth = maxHealth;
     }
 
+    [Header("Effects")]
+    [SerializeField] private GameObject bloodVfxPrefab;
+
     [Server]
     public void TakeDamage(int amount, Vector3? damageSource = null)
     {
@@ -33,8 +36,6 @@ public class Health : NetworkBehaviour, IDamageable
         ShieldSystem shield = GetComponent<ShieldSystem>();
         if (shield != null && damageSource.HasValue)
         {
-            // Bloğu dene. Eğer bloklarsa hasarı azaltır veya sıfırlar.
-            // also returns whether execution should continue (e.g. fully blocked?)
             amount = shield.TryBlock(amount, damageSource.Value);
         }
 
@@ -45,14 +46,47 @@ public class Health : NetworkBehaviour, IDamageable
         
         Debug.Log($"{name} took {amount} damage. Current Health: {currentHealth}");
 
-        // CRITICAL FIX: SyncVar hook'u Server/Host üzerinde otomatik çalışmaz.
-        // Host oynayan kişinin UI'ının güncellenmesi için bunu elle çağırmalıyız.
+        // KAN EFEKTİ (Herkes görsün)
+        RpcSpawnBlood(transform.position + Vector3.up * 1.5f);
+
         HandleHealthChanged(oldHealth, currentHealth);
 
         if (currentHealth <= 0)
         {
             Die();
         }
+    }
+
+    [ClientRpc]
+    private void RpcSpawnBlood(Vector3 position)
+    {
+        if (bloodVfxPrefab != null)
+        {
+            GameObject fx = Instantiate(bloodVfxPrefab, position, Quaternion.identity);
+            Destroy(fx, 2f);
+        }
+        else
+        {
+            // FALLBACK: Eğer prefab atanmamışsa basit kırmızı efekt oluştur (Programmer Art)
+            CreateFallbackBlood(position);
+        }
+    }
+
+    private void CreateFallbackBlood(Vector3 pos)
+    {
+        GameObject blood = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        blood.transform.position = pos;
+        blood.transform.localScale = Vector3.one * 0.3f;
+        
+        var rend = blood.GetComponent<Renderer>();
+        if (rend != null) 
+        {
+            rend.material = new Material(Shader.Find("Standard")); // Basit material
+            rend.material.color = Color.red;
+        }
+
+        Destroy(blood.GetComponent<Collider>()); // Fizik etkileşimi olmasın
+        Destroy(blood, 0.5f); // Yarım saniye sonra sil
     }
 
     private void HandleHealthChanged(int oldValue, int newValue)

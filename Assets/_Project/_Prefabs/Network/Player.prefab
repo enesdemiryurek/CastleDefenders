@@ -530,9 +530,9 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   unitPrefabs:
-  - {fileID: 779360704632571355, guid: 709e4e27d4b5ca14f96e31ba5faeb771, type: 3}
-  - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
-  - {fileID: 4918208957073381471, guid: 4295544bff123264b9345dd4c94c4d8b, type: 3}
+  - {fileID: 6708056413202264723, guid: ba9d9f08f3cdef547b3f5c36fd177e98, type: 3}
+  - {fileID: 8447505827813466657, guid: 1f7b943a719a12b4da2e7a4713d4fd48, type: 3}
+  - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
   unitCountPerSquad: 48
   spacing: 1
   unitsPerRow: 16
