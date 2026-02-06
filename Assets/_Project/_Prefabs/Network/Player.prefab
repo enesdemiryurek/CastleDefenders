@@ -514,6 +514,7 @@ MonoBehaviour:
   maxHealth: 500
   destroyOnDeath: 1
   deathDelay: 6
+  bloodVfxPrefab: {fileID: 0}
 --- !u!114 &6795650368668275692
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -530,9 +531,9 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   unitPrefabs:
-  - {fileID: 6708056413202264723, guid: ba9d9f08f3cdef547b3f5c36fd177e98, type: 3}
-  - {fileID: 8447505827813466657, guid: 1f7b943a719a12b4da2e7a4713d4fd48, type: 3}
+  - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
   - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
+  - {fileID: 9135030631906025131, guid: 779971447191b3c48ab49d55622efeff, type: 3}
   unitCountPerSquad: 48
   spacing: 1
   unitsPerRow: 16
