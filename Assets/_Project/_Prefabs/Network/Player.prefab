@@ -533,8 +533,8 @@ MonoBehaviour:
   unitPrefabs:
   - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
   - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
-  - {fileID: 9135030631906025131, guid: 779971447191b3c48ab49d55622efeff, type: 3}
-  unitCountPerSquad: 48
+  - {fileID: 4918208957073381471, guid: 4295544bff123264b9345dd4c94c4d8b, type: 3}
+  unitCountPerSquad: 80
   spacing: 1
   unitsPerRow: 16
   distanceBetweenSquads: 1
