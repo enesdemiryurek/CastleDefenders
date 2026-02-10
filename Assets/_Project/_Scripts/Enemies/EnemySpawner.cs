@@ -113,4 +113,18 @@ public class EnemySpawner : NetworkBehaviour
             if (i == 0) Debug.Log($"[EnemySpawner] {config.name} ilk birim doğdu. Pos: {finalPosition}");
         }
     }
+
+    [ContextMenu("DEBUG: Force Spawn First Wave")]
+    public void ForceSpawnDebug()
+    {
+        if (spawnConfigs.Count > 0)
+        {
+            Debug.Log("[EnemySpawner] FORCE SPAWN Triggered via Menu.");
+            StartCoroutine(SpawnRoutine(spawnConfigs[0]));
+        }
+        else
+        {
+            Debug.LogError("[EnemySpawner] No Configs found to spawn!");
+        }
+    }
 }

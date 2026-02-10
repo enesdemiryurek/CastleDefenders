@@ -203,7 +203,7 @@ public class PlayerUnitCommander : NetworkBehaviour
         if (count == 0) return;
 
         // 2. Noktaları Hesapla (Artık commandCursorPos kullanıyoruz)
-        List<Vector3> points = CalculateFormationPoints(commandCursorPos, commandRotation, count, 1.1f);
+        List<Vector3> points = CalculateFormationPoints(commandCursorPos, commandRotation, count, 1.0f);
 
         // 3. Markerları Yerleştir
         EnsureMarkerPool(points.Count);
@@ -319,14 +319,22 @@ public class PlayerUnitCommander : NetworkBehaviour
     {
         List<Vector3> points = new List<Vector3>();
         
-        int unitsPerRow = Mathf.CeilToInt(unitCount / 2f); 
-        if (unitsPerRow < 5) unitsPerRow = 5;
+        // USER REQUEST: "36 asker var 12 12 12 dursunlar"
+        // Yani DERİNLİK (Row Count) sabit 3 olacak, GENİŞLİK (Col Count) ona göre artacak.
+        int rowCount = 3;
+        int unitsPerRow = Mathf.CeilToInt(unitCount / (float)rowCount);
+        
+        // Güvenlik: En az 1 sütun olsun
+        if (unitsPerRow < 1) unitsPerRow = 1;
 
         for (int i = 0; i < unitCount; i++)
         {
-            // X ve Z hesabı
-            float xOffset = (i % unitsPerRow) * spacing - (unitsPerRow * spacing / 2f);
-            float zOffset = (i / unitsPerRow) * spacing;
+            // X (Genişlik) ve Z (Derinlik)
+            int col = i % unitsPerRow;
+            int row = i / unitsPerRow;
+
+            float xOffset = col * spacing - ((unitsPerRow * spacing) / 2f);
+            float zOffset = row * spacing;
 
             Vector3 finalPos = center + (rotation * new Vector3(xOffset, 0, -zOffset));
             points.Add(finalPos);
@@ -399,30 +407,51 @@ public class PlayerUnitCommander : NetworkBehaviour
 
         Vector3 leaderPos = transform.position;
         Quaternion leaderRot = transform.rotation;
+        
+        // Sıkı düzen (Dipdibe)
+        float spacing = 1.0f;
+        float squadGap = 2.0f; // Birlikler arası boşluk
+        float currentZOffset = 3.0f; // Oyuncunun ne kadar arkasından başlasın?
 
-        // Her takip eden grup için ayrı ayrı işlem yapabiliriz ama
-        // basitleştirmek için hepsini arkamıza dizelim.
-        // Gelişmiş versiyonda: Squad 1 sağa, Squad 2 sola gibi offsetler verilebilir.
-        // Şimdilik: Hepsini tek bir ordu gibi arkaya diziyor ama SADECE LISTEDE OLANLARI.
+        // Her takip eden grup (Squad) için ayrı blok oluştur
+        // followingSquads listesindeki sıraya göre dizelim (veya SquadIndex'e göre sort edebiliriz)
+        // Şimdilik 0, 1, 2... sırayla dizmek daha mantıklı.
+        
+        List<int> sortedSquads = new List<int>(followingSquads);
+        // sortedSquads.Sort(); // İPTAL: Kullanıcının ekleme sırasına saygı duy (Archers -> Infantry ise öyle kalsın)
 
-        int i = 0;
-        int rows = 5;
-        float spacing = 2f;
-
-        foreach (UnitMovement unit in myUnits)
+        foreach (int squadIndex in sortedSquads)
         {
-            if (unit == null) continue;
-            
-            // Eğer bu unit'in mensup olduğu squad takip listesinde YOKSA, dokunma.
-            if (!followingSquads.Contains(unit.SquadIndex)) continue;
+            var unitsInSquad = myUnits.FindAll(u => u.SquadIndex == squadIndex);
+            if (unitsInSquad.Count == 0) continue;
 
-            float xOffset = (i % rows) * spacing - (rows * spacing / 2f);
-            float zOffset = (i / rows) * spacing + 3f;
+            // 3 SIRA KURALI (Shield Wall: Genişlik artar, Derinlik sabit 3)
+            int rowCount = 3;
+            int unitsPerRow = Mathf.CeilToInt(unitsInSquad.Count / (float)rowCount);
+            if (unitsPerRow < 1) unitsPerRow = 1;
+
+            // Spacing (Sıkı: 0.8f)
+            float localSpacing = 0.8f; 
             
-            Vector3 targetPos = leaderPos - (leaderRot * Vector3.forward * zOffset) + (leaderRot * Vector3.right * xOffset);
-            
-            unit.MoveTo(targetPos);
-            i++;
+            for (int i = 0; i < unitsInSquad.Count; i++)
+            {
+                int col = i % unitsPerRow;
+                int row = i / unitsPerRow;
+
+                float xOffset = col * localSpacing - ((unitsPerRow * localSpacing) / 2f);
+                float rowDepth = row * localSpacing;
+                
+                // Oyuncunun arkasına doğru (Z ekseninde geriye)
+                float totalZ = currentZOffset + rowDepth;
+
+                Vector3 targetPos = leaderPos - (leaderRot * Vector3.forward * totalZ) + (leaderRot * Vector3.right * xOffset);
+                
+                unitsInSquad[i].MoveTo(targetPos);
+            }
+
+            // Bir sonraki birlik için offset güncelle
+            int totalRows = Mathf.CeilToInt(unitsInSquad.Count / (float)unitsPerRow);
+            currentZOffset += (totalRows * localSpacing) + squadGap;
         }
     }
 

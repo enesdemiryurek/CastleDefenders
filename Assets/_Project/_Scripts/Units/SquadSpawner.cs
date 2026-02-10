@@ -7,9 +7,9 @@ public class SquadSpawner : NetworkBehaviour
     [Header("Squad Settings")]
     [SerializeField] private GameObject[] unitPrefabs; // Artık birden fazla birlik seçebilirsin
     [SerializeField] private int unitCountPerSquad = 10;
-    [SerializeField] private float spacing = 1.5f;
+    [SerializeField] private float spacing = 0.8f; // Shield Wall (Çok Sıkı)
     [SerializeField] private int unitsPerRow = 3; // 3'erli Düzgün Sıra
-    [SerializeField] private float distanceBetweenSquads = 8.0f; // Birlikler arası mesafe
+    [SerializeField] private float distanceBetweenSquads = 6.0f; // Birlikler arası mesafe (Sıkılaştı)
     [SerializeField] private float maxNavMeshDistance = 5.0f; // NavMesh bulma yarıçapı
 
     private PlayerUnitCommander commander;
@@ -78,11 +78,16 @@ public class SquadSpawner : NetworkBehaviour
             Vector3 squadOffset = -(flatForward * (squadIndex * distanceBetweenSquads)); 
             Vector3 currentSquadStartPos = startPos + squadOffset;
 
+            // 3. SIRA MANTIĞI (Shield Wall Spawn)
+            int rowCount = 3;
+            int dynamicUnitsPerRow = Mathf.CeilToInt(unitCountPerSquad / (float)rowCount);
+            if (dynamicUnitsPerRow < 1) dynamicUnitsPerRow = 1;
+
             for (int i = 0; i < unitCountPerSquad; i++)
             {
                 // Dizilim Hesabı (Formation Grid)
-                float xOffset = (i % unitsPerRow) * spacing - ((unitsPerRow * spacing) / 2f);
-                float zOffset = (i / unitsPerRow) * spacing;
+                float xOffset = (i % dynamicUnitsPerRow) * spacing - ((dynamicUnitsPerRow * spacing) / 2f);
+                float zOffset = (i / dynamicUnitsPerRow) * spacing;
 
                 Vector3 spawnPos = currentSquadStartPos + (flatRight * xOffset) - (flatForward * zOffset);
                 
@@ -91,12 +96,6 @@ public class SquadSpawner : NetworkBehaviour
                 if (NavMesh.SamplePosition(spawnPos, out hit, maxNavMeshDistance, NavMesh.AllAreas))
                 {
                     spawnPos = hit.position;
-                }
-                else
-                {
-                    // Eğer nokta bulunamazsa, bu askeri atlayabiliriz veya zorla pozisyonda oluştururuz
-                    // NavMeshAgent hata vereceği için en azından loglayalım
-                    // Debug.LogWarning($"[SquadSpawner] Could not find NavMesh near {spawnPos}");
                 }
 
                 // 1. Yarat

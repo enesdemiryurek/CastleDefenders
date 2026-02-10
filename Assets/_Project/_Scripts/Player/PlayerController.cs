@@ -6,13 +6,18 @@ using UnityEngine.InputSystem;
 public class PlayerController : NetworkBehaviour
 {
     [Header("Movement Settings")]
-    [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float sprintSpeed = 8f;
-    [SerializeField] private float crouchSpeed = 2.5f;
-    [SerializeField] private float jumpHeight = 2f;
-    [SerializeField] private float gravity = -9.81f;
+    [SerializeField] private float moveSpeed = 2.0f;
+    [SerializeField] private float sprintSpeed = 4.0f;
+    [SerializeField] private float crouchSpeed = 2.5f; // User requested 2.5f for blocking
+    [SerializeField] private float jumpHeight = 0.6f;
+    [SerializeField] private float gravity = -20f; // Gravity arttirilabilir, daha tok hissiyat icin
     [SerializeField] private float rotationSpeed = 10f;
     
+    [Header("Climbing Settings")]
+    [SerializeField] private float climbSpeed = 4f;
+    private bool canClimb = false;
+    private bool isClimbing = false;
+
     [Header("Crouch Settings")]
     [SerializeField] private float normalHeight = 2f;
     [SerializeField] private float crouchHeight = 1f;
@@ -86,12 +91,45 @@ public class PlayerController : NetworkBehaviour
         
         // 1. Client Authority Check
         if (!isLocalPlayer) return;
+
+        // Tırmanma Başlatma/Bitirme
+        if (canClimb && InputEnabled && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            isClimbing = !isClimbing;
+            if(isClimbing) velocity = Vector3.zero; // Hızı sıfırla ki düşmeyelim
+        }
         
         HandleMovement();
     }
 
     private void HandleMovement()
     {
+        Animator anim = GetComponent<Animator>();
+
+        // --- CLIMBING MOVEMENT ---
+        if (isClimbing)
+        {
+            float vInput = 0;
+            if (Keyboard.current.wKey.isPressed) vInput = 1;
+            if (Keyboard.current.sKey.isPressed) vInput = -1;
+
+            Vector3 climbDir = new Vector3(0, vInput * climbSpeed, 0);
+            characterController.Move(climbDir * Time.deltaTime);
+            
+            // Tırmanırken Gravity YOK
+            velocity = Vector3.zero; 
+
+            // Zıplayıp bırakmak için
+            if (Keyboard.current.spaceKey.wasPressedThisFrame)
+            {
+                isClimbing = false;
+                velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity); // Zıpla
+            }
+            return; // Normal hareketi yapma
+        }
+
+        // --- NORMAL MOVEMENT ---
+
         // Ground Check
         bool isGrounded = characterController.isGrounded;
         
@@ -102,26 +140,41 @@ public class PlayerController : NetworkBehaviour
 
         // --- INPUT ---
         Vector2 input = Vector2.zero;
-        if (!isDead && InputEnabled && Keyboard.current != null) // Ölü değilse ve Input açıksa
+        bool isBlockingInput = false;
+
+        if (!isDead && InputEnabled) 
         {
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) input.x += 1;
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) input.x -= 1;
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1;
+                if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1;
+                if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) input.x += 1;
+                if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) input.x -= 1;
+            }
+
+            // Right Click -> BLOCK
+            if (Mouse.current != null && Mouse.current.rightButton.isPressed)
+            {
+                isBlockingInput = true;
+            }
         }
 
-        // --- SPRINT & CROUCH LOGIC ---
+        // --- SPRINT, CROUCH & BLOCK LOGIC ---
         float currentSpeed = moveSpeed;
         float targetHeight = normalHeight;
 
-        // Shift -> Sprint
-        if (Keyboard.current.leftShiftKey.isPressed && !Keyboard.current.leftCtrlKey.isPressed)
+        // Block -> Yavaşla (En öncelikli)
+        if (isBlockingInput)
+        {
+            currentSpeed = crouchSpeed; // Blok yaparken yavaş yürüsün (Crouch hızıyla aynı olsun şimdilik)
+        }
+        // Shift -> Sprint (Blok yoksa)
+        else if (Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed && !Keyboard.current.leftCtrlKey.isPressed)
         {
             currentSpeed = sprintSpeed;
         }
-
-        // Ctrl -> Crouch
-        if (Keyboard.current.leftCtrlKey.isPressed)
+        // Ctrl -> Crouch (Blok yoksa)
+        else if (Keyboard.current != null && Keyboard.current.leftCtrlKey.isPressed)
         {
             currentSpeed = crouchSpeed;
             targetHeight = crouchHeight;
@@ -130,8 +183,9 @@ public class PlayerController : NetworkBehaviour
         // Height Smoothness
         characterController.height = Mathf.Lerp(characterController.height, targetHeight, Time.deltaTime * 10f);
 
+        // (Animation updates moved to end of function)
+
         // --- ROTATION (TPS) ---
-        // --- MOVE & ROTATION ---
         Vector3 direction = new Vector3(input.x, 0f, input.y).normalized;
         Vector3 moveDir = Vector3.zero;
  
@@ -158,6 +212,7 @@ public class PlayerController : NetworkBehaviour
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            if (anim != null) anim.SetTrigger("Jump");
         }
 
         // --- GRAVITY ---
@@ -168,16 +223,36 @@ public class PlayerController : NetworkBehaviour
         characterController.Move(finalMove * Time.deltaTime);
 
         // --- ANIMATION SYNC ---
-        // Animator'a hızı gönder (Yürüme/Koşma için)
-        // Sadece yatay hızın büyüklüğünü alıyoruz (gravity hariç)
+        // Animator'a hızı gönder
         Vector3 horizontalVelocity = new Vector3(characterController.velocity.x, 0, characterController.velocity.z);
         float speed = horizontalVelocity.magnitude;
         
-        // Eğer Animator varsa parametreyi güncelle
-        Animator anim = GetComponent<Animator>();
         if (anim != null)
         {
             anim.SetFloat("Speed", speed);
+            anim.SetBool("IsBlocking", isBlockingInput); 
+            anim.SetBool("Climb", isClimbing);
+            anim.SetBool("IsGrounded", isGrounded);
+        }
+    }
+
+    // --- TRIGGER DETECTION FOR LADDER ---
+    private void OnTriggerEnter(Collider other)
+    {
+        // SiegeLadder scriptine sahip bir objeye (trigger'ına) girdik mi?
+        if (other.GetComponentInParent<SiegeLadder>() != null)
+        {
+            canClimb = true;
+            // Debug.Log("Merdiven Alanı: E ile Tırman");
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.GetComponentInParent<SiegeLadder>() != null)
+        {
+            canClimb = false;
+            isClimbing = false; // Alandan çıkınca düşersin (veya inersin)
         }
     }
 }

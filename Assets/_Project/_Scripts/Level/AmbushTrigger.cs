@@ -20,6 +20,9 @@ public class AmbushTrigger : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // DEBUG: Ne girdi?
+        Debug.Log($"[AmbushTrigger] Trigger'a giren obje: {other.name}, Tag: {other.tag}, Root: {other.transform.root.name}");
+
         if (!isServer) return;
         if (triggered && oneTimeUse) return;
 
