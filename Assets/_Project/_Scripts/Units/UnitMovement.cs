@@ -23,37 +23,6 @@ public class UnitMovement : NetworkBehaviour
     [SerializeField] private float chargeWindup = 1.0f; // Geri geldi (1 saniye)
     [SerializeField] private string chargeTriggerName = "Charge";
 
-    // ... (Aradaki kodlar) ...
-
-    [Server]
-    public override void OnStartServer()
-    {
-        base.OnStartServer();
-
-        // 1. ZEMİN FIX
-        if(agent != null) agent.baseOffset = 0f; 
-        SnapToGround();
-        
-        // 2. NAVMESH AYARLARI
-        if (agent != null)
-        {
-            agent.acceleration = 20f; 
-            agent.angularSpeed = 2000f; 
-            agent.autoBraking = false; 
-            agent.stoppingDistance = 1.0f;
-        }
-
-        // 3. KAYITLAR
-        if (BattleManager.Instance != null) BattleManager.Instance.RegisterPlayerUnit(this);
-
-        // Komutanı Bulma (Tekrar eden döngü ile - Race Condition Fix)
-        StartCoroutine(TryRegisterCommander());
-
-        // 4. Varsayılan State
-        currentState = UnitState.Guarding;
-        guardPosition = transform.position; // SnapToGround'dan sonra al ki kayma yapmasın
-    }
-
     private IEnumerator TryRegisterCommander()
     {
         // 10 saniye boyunca komutanı ara
@@ -71,28 +40,42 @@ public class UnitMovement : NetworkBehaviour
         Debug.LogWarning($"[Unit {netId}] Komutan BULUNAMADI! (20 saniye denendi)");
     }
 
-    // ... (Aradaki kodlar değişmedi)
-
     private IEnumerator ChargeRoutine()
     {
         // 1. Önce Dur ve Bağır (Anlık)
-        if(agent.isOnNavMesh) agent.isStopped = true;
+        if(agent.isOnNavMesh) 
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+        }
         currentState = UnitState.Idle; // Animasyon oynarken hareket etmesin
 
         NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
         if (netAnim != null) netAnim.SetTrigger("Charge");
 
-        // 2. Bekleme (1 Saniye - User Request)
-        yield return new WaitForSeconds(chargeWindup);
+        // 2. Bekleme (1 Saniye - User Request: Yarıda Kesilsin)
+        yield return new WaitForSeconds(chargeWindup); // Inspector'dan 1.0 ayarlı olmalı
 
-        // 3. Saldır!
-        if (netAnim != null) netAnim.ResetTrigger("Charge"); // Animasyon takılı kalmasın
+        // 3. Saldır! (Animasyonu Zorla Kes)
+        if (netAnim != null) 
+        {
+            netAnim.ResetTrigger("Charge"); 
+            // ANIMASYONU KESMEK İÇİN: "Locomotion" veya "Move" state'ine zorla geçiş yap
+            Animator anim = GetComponent<Animator>();
+            if(anim != null) 
+            {
+                // FORCE CUT: 0.1 saniyede geçiş yap (Neredeyse anında)
+                // Eğer state adı farklıysa (örn: "Run", "Blend Tree") burayı güncellemek gerekebilir.
+                anim.CrossFadeInFixedTime("Locomotion", 0.05f); 
+            }
+        }
+        
         chargingWindupActive = false; // Kilidi aç
         currentState = UnitState.Charging; // Tekrar Charge moda al
         currentTarget = null; 
         if(agent.isOnNavMesh) agent.isStopped = false;
         
-        Debug.Log($"[Unit {netId}] HÜCUM BAŞLADI!");
+        Debug.Log($"[Unit {netId}] HÜCUM BAŞLADI (1sn Cut)!");
     }
 
     [Header("Visual")]
@@ -125,10 +108,22 @@ public class UnitMovement : NetworkBehaviour
             if (anim != null && anim.transform != transform) modelTransform = anim.transform;
         }
 
-        // Root Motion İptali
-        Animator rootAnim = GetComponent<Animator>();
-        if (rootAnim == null) rootAnim = GetComponentInChildren<Animator>();
-        if (rootAnim != null) rootAnim.applyRootMotion = false;
+        // Tüm Animatorlar için Culling Mode = Always Animate (Uzakta donmasın)
+        Animator[] allAnims = GetComponentsInChildren<Animator>();
+        foreach(var anim in allAnims)
+        {
+            if(anim == null) continue;
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            if(anim.transform == transform) anim.applyRootMotion = false; // Sadece root'taki hareket etmesin
+        }
+
+        // Tüm SkinnedMeshRendererlar için Update When Offscreen = True (Uzakta yok olmasın)
+        SkinnedMeshRenderer[] allSkinnedMeshes = GetComponentsInChildren<SkinnedMeshRenderer>();
+        foreach(var smr in allSkinnedMeshes)
+        {
+            if(smr == null) continue;
+            smr.updateWhenOffscreen = true; // Bounds dışına çıksa bile hesapla (LOD sorunu yoksa görünür kılar)
+        }
     }
 
 
@@ -163,7 +158,7 @@ public class UnitMovement : NetworkBehaviour
     [Server]
     public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false)
     {
-        Debug.Log($"[Server] Unit Moving To: {position}");
+        // Debug.Log($"[Server] Unit Moving To: {position}");
         currentState = UnitState.Moving; 
         guardPosition = position;
         guardRotation = lookRotation; // Rotasyonu kaydet
@@ -175,11 +170,22 @@ public class UnitMovement : NetworkBehaviour
     [Server]
     public void StartCharging()
     {
+        // SPAM CHECK: Zaten Hucumdaysa tekrar baslatma
+        if (isCharging) return;
+
         Debug.Log("[Server] Unit START CHARGING!");
         currentState = UnitState.Charging; // Mantıken Charging de kalsın ama Routine onu Idle'a çekecek
         currentTarget = null;
         isCharging = true;
         chargingWindupActive = true; // KİLİDİ AKTİF ET
+        
+        // Hareket Kilidi (Anında Dur)
+        if(agent != null && agent.enabled && agent.isOnNavMesh) 
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+            agent.ResetPath();
+        }
 
         if (chargeRoutine != null) StopCoroutine(chargeRoutine);
         chargeRoutine = StartCoroutine(ChargeRoutine());
@@ -206,6 +212,38 @@ public class UnitMovement : NetworkBehaviour
         if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
     }
 
+    [Server]
+    public override void OnStartServer()
+    {
+        base.OnStartServer();
+
+        // 1. ZEMİN FIX
+        if(agent != null) agent.baseOffset = 0f; 
+        SnapToGround();
+        
+        // 2. NAVMESH AYARLARI
+        if (agent != null)
+        {
+            agent.acceleration = 20f; 
+            agent.angularSpeed = 2000f; 
+            agent.autoBraking = false; 
+            agent.stoppingDistance = 1.0f;
+            agent.autoTraverseOffMeshLink = false; // MANUEL TIRMANMA İÇİN
+        }
+
+        // 3. KAYITLAR
+        if (BattleManager.Instance != null) BattleManager.Instance.RegisterPlayerUnit(this);
+
+        // Komutanı Bulma (Tekrar eden döngü ile - Race Condition Fix)
+        StartCoroutine(TryRegisterCommander());
+
+        // 4. Varsayılan State
+        currentState = UnitState.Guarding;
+        guardPosition = transform.position; // SnapToGround'dan sonra al ki kayma yapmasın
+    }
+
+    // ... (Aradaki kodlar) ...
+
     private void Update()
     {
         // Sadece Server karar verir
@@ -215,12 +253,65 @@ public class UnitMovement : NetworkBehaviour
         AlignModelToGround();
         UpdateAnimations();
 
+        // MERDİVEN (OffMeshLink) KONTROLÜ
+        if (agent.isOnOffMeshLink && !isClimbing)
+        {
+            StartCoroutine(TraverseLadder());
+            return;
+        }
+
         // Karar Mekanizması (Brain)
         if (Time.time - lastDecisionTime >= updateInterval)
         {
             lastDecisionTime = Time.time;
             Think();
         }
+    }
+
+    private bool isClimbing = false;
+
+    private IEnumerator TraverseLadder()
+    {
+        isClimbing = true;
+        currentState = UnitState.Moving; // State güncelle
+        
+        if(agent.enabled) agent.isStopped = true;
+
+        // Animasyon
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger("ClimbTrigger"); // Veya SetBool("Climb", true)
+
+        OffMeshLinkData data = agent.currentOffMeshLinkData;
+        Vector3 startPos = agent.transform.position;
+        Vector3 endPos = data.endPos + Vector3.up * agent.baseOffset;
+
+        float duration = 2.5f; // Tırmanma hızı
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            if (this == null) yield break; // Obje yok olduysa çık
+
+            // Lineer İnterpolasyon (Lerp) ile taşı
+            transform.position = Vector3.Lerp(startPos, endPos, elapsed / duration);
+            
+            // Yüzünü duvara (bitişe) dön
+            Vector3 lookPos = endPos;
+            lookPos.y = transform.position.y;
+            transform.LookAt(lookPos);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.position = endPos;
+        if(agent.enabled) agent.CompleteOffMeshLink();
+        
+        if(agent.enabled) agent.isStopped = false;
+        isClimbing = false;
+        
+        // Nöbet pozisyonunu güncelle ki geri dönmeye çalışmasın
+        guardPosition = endPos;
     }
 
     [Server]

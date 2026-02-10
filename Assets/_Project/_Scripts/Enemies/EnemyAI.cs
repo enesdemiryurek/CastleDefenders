@@ -35,6 +35,7 @@ public class EnemyAI : NetworkBehaviour
     private float lastAttackTime;
     private float lastGlobalSearchTime;
     private bool isDead = false;
+    private bool isClimbing = false;
 
     // ... (Awake and other methods remain same) ...
 
@@ -117,6 +118,7 @@ public class EnemyAI : NetworkBehaviour
             if (ballistic != null)
             {
                 // Hedef pozisyonunu ver (Launch içinde Rpc var)
+                ballistic.SetShooter(gameObject); // DOST ATEŞİ FIX: Kendini veya arkadaşlarını vurmasın
                 ballistic.Launch(currentTarget != null ? currentTarget.position : transform.forward * 10f);
             }
         }
@@ -201,6 +203,7 @@ public class EnemyAI : NetworkBehaviour
         if(agent != null) 
         {
              agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
+             agent.autoTraverseOffMeshLink = false; // MERDİVEN İÇİN: Otomatik geçişi kapat
         }
         
         // Savaş Yönetimine Kaydol (RESTORED)
@@ -249,6 +252,13 @@ public class EnemyAI : NetworkBehaviour
 
         // Server-Side Mantık
         if (!agent.enabled) return;
+
+        // Tırmanma (OffMeshLink) Kontrolü
+        if (agent.isOnOffMeshLink)
+        {
+            if (!isClimbing) StartCoroutine(TraverseLadder());
+            return;
+        }
 
         // Hedef Arama (1 saniyede bir - Yeterli)
         if (Time.time - lastGlobalSearchTime > 1.0f) 
@@ -383,6 +393,46 @@ public class EnemyAI : NetworkBehaviour
     public event System.Action OnAttack;
 
 
+
+    private System.Collections.IEnumerator TraverseLadder()
+    {
+        isClimbing = true;
+        agent.isStopped = true;
+
+        if (animator != null) animator.SetBool("Climb", true); // Tırmanma Animasyonu
+        if (networkAnimator != null) networkAnimator.SetTrigger("ClimbTrigger");
+
+        OffMeshLinkData data = agent.currentOffMeshLinkData;
+        Vector3 startPos = agent.transform.position;
+        Vector3 endPos = data.endPos + Vector3.up * agent.baseOffset; // Yükseklik farkını koru
+
+        float duration = 3.0f; // Tırmanma süresi (Animasyonla eşleşmeli)
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            if (isDead) yield break;
+            
+            agent.transform.position = Vector3.Lerp(startPos, endPos, elapsed / duration);
+            
+            // Yüzünü duvara dön (Start -> End Yönüne değil, duvarın normaline)
+            // Basitçe bitişe baksa yeter
+            Vector3 lookPos = endPos;
+            lookPos.y = agent.transform.position.y;
+            agent.transform.LookAt(lookPos);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        agent.transform.position = endPos;
+        agent.CompleteOffMeshLink();
+        
+        if (animator != null) animator.SetBool("Climb", false);
+        
+        agent.isStopped = false;
+        isClimbing = false;
+    }
 
     private void ResumeMovement()
     {

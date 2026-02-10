@@ -295,7 +295,7 @@ MonoBehaviour:
   editorAutoStart: 0
   sendRate: 60
   offlineScene: Assets/_Project/_Scenes/MainMenu.unity
-  onlineScene: "Assets/_Project/_Scenes/Level1PusuB\xF6l\xFCm1.unity"
+  onlineScene: "Assets/_Project/_Scenes/Level1PusuB\xF6l\xFCm2.unity"
   offlineSceneLoadDelay: 0
   transport: {fileID: 328830429}
   networkAddress: localhost
@@ -303,7 +303,7 @@ MonoBehaviour:
   disconnectInactiveConnections: 0
   disconnectInactiveTimeout: 60
   authenticator: {fileID: 0}
-  playerPrefab: {fileID: 4708952035277467643, guid: ca0cb4344cac8174eba1eceb0fa706f8, type: 3}
+  playerPrefab: {fileID: 2630439551736466981, guid: 2dd79b339daf62f40b9a49ab4389b9f3, type: 3}
   autoCreatePlayer: 1
   playerSpawnMethod: 0
   spawnPrefabs:
@@ -312,6 +312,35 @@ MonoBehaviour:
   - {fileID: 2815731460681966415, guid: cee0e4ea161897e41bef63c8a280ad2e, type: 3}
   - {fileID: 0}
   - {fileID: 0}
+  - {fileID: 5515038361612818463, guid: 982ef13f6b97ea5408cb5d0fa8cc8d6a, type: 3}
+  - {fileID: 769359131696096673, guid: 7ea37ba717b7c644aab79b8288f25315, type: 3}
+  - {fileID: 8277154536518808949, guid: d2fb77fa8ce9ba14985c90d163fadb1a, type: 3}
+  - {fileID: 1469475426469140342, guid: be57ae427e5b6ca41a9b0597ac476e05, type: 3}
+  - {fileID: 5978820085181716148, guid: 3bd40163edd8b5f4689b4bafd6f83000, type: 3}
+  - {fileID: 4196541375657210504, guid: 5344ee1ad9bd4c34b9abb28b3838d630, type: 3}
+  - {fileID: 1545428889217555557, guid: dbaf1ee09819eb643b36e40bc427d7ae, type: 3}
+  - {fileID: 3607866987666949717, guid: c26a380bdfc19ea4f9f0a2a83f319745, type: 3}
+  - {fileID: 6465655969086264776, guid: 3b0987269761fe04d87cc1fd5d0d1036, type: 3}
+  - {fileID: 1254341032209590857, guid: 0a8f97ed369f9e545b4eff947b8d5205, type: 3}
+  - {fileID: 1253772669599855528, guid: 5d738d92efe5bc74f87b8eb7ccbefd7b, type: 3}
+  - {fileID: 888842915217599424, guid: 92caa672a53439b4caffe59ecd10e45e, type: 3}
+  - {fileID: 4409913406696355438, guid: 220cef3d774451b4e94824dcb5ae19a3, type: 3}
+  - {fileID: 9135030631906025131, guid: 779971447191b3c48ab49d55622efeff, type: 3}
+  - {fileID: 6708056413202264723, guid: ba9d9f08f3cdef547b3f5c36fd177e98, type: 3}
+  - {fileID: 779360704632571355, guid: 709e4e27d4b5ca14f96e31ba5faeb771, type: 3}
+  - {fileID: 1945702286985728654, guid: b988276d44334f543bb19718a355bc23, type: 3}
+  - {fileID: 2076850657106523138, guid: 729eb35522936f54389540844ee7331e, type: 3}
+  - {fileID: 8447505827813466657, guid: 1f7b943a719a12b4da2e7a4713d4fd48, type: 3}
+  - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
+  - {fileID: 9210473155263703847, guid: c379cfb442fb85c45ba81aceebe977a3, type: 3}
+  - {fileID: 8559101773198800616, guid: b94e5b84476e58b4cacabbbd70fdecff, type: 3}
+  - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
+  - {fileID: 8141474933187515549, guid: a7845614ababf0e4ea916845f004dc8d, type: 3}
+  - {fileID: 4918208957073381471, guid: 4295544bff123264b9345dd4c94c4d8b, type: 3}
+  - {fileID: 1987327075311893564, guid: 875a6cf677e8fa74a89a450f8cab9f45, type: 3}
+  - {fileID: 8637678551746840305, guid: a429960b7f76f5348b91527cbb7eea56, type: 3}
+  - {fileID: 3780404385541898944, guid: 4ca489bb03e534a4dbf56d41d6ca68e9, type: 3}
+  - {fileID: 7526483880363365596, guid: 99123eae02781154fab41c07b965d652, type: 3}
   exceptionsDisconnect: 1
   snapshotSettings:
     bufferTimeMultiplier: 2

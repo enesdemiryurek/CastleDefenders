@@ -22,7 +22,7 @@ public class PlayerCombat : NetworkBehaviour
 
     // Animator Parametre İsimleri
     private const string ATTACK_TRIGGER = "Attack";
-    private const string BLOCK_BOOL = "Blocking";
+    private const string BLOCK_BOOL = "IsBlocking";
 
     private void Awake()
     {
