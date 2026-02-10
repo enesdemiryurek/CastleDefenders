@@ -117,10 +117,12 @@ public class SquadSpawner : NetworkBehaviour
             }
 
             // DOĞDUKLARI GİBİ TAKİPE AL (Komutları benden al)
+            /*
             if (commander != null)
             {
                 commander.ServerSetFollowing(squadIndex, true);
             }
+            */
         }
     }
 }

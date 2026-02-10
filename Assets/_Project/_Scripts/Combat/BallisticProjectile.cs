@@ -79,67 +79,95 @@ public class BallisticProjectile : NetworkBehaviour
             });
     }
 
-    // FixedUpdate'e gerek kalmadı (DOTween yönetiyor)
+    // --- COLLISION LOGIC ---
+
+    private bool hasHit = false;
+
     private void OnCollisionEnter(Collision collision)
     {
-        // Debug
-        Debug.Log($"Arrow hit: {collision.gameObject.name} (Tag: {collision.gameObject.tag})");
-
-        if (!isServer) return; // Sadece Server hasar verir
-
-        if (collision.gameObject.GetComponent<BallisticProjectile>()) return; // Oka çarpma
-        if (collision.gameObject.GetComponent<BallisticProjectile>()) return; // Oka çarpma
-        
-        // Vuran kişiye (shooter) çarpma
-        if (shooter != null && (collision.gameObject == shooter || collision.transform.IsChildOf(shooter.transform))) return;
-
-        // DOST ATEŞİ KORUMASI:
-        // Eğer shooter bir "UnitMovement" ise (Bizim asker), diğer "UnitMovement"lara (Bizim askerler) vurmasın.
-        if (shooter != null && shooter.GetComponent<UnitMovement>() != null && collision.gameObject.GetComponentInParent<UnitMovement>() != null) return;
-        
-        // Eğer shooter bir "EnemyAI" ise, diğer "EnemyAI"lara vurmasın.
-        if (shooter != null && shooter.GetComponent<EnemyAI>() != null && collision.gameObject.GetComponentInParent<EnemyAI>() != null) return;
-
-        // IDamageable ara (Kendisinden başlayıp yukarı doğru)
-        IDamageable target = collision.gameObject.GetComponentInParent<IDamageable>();
-        
-        if (target != null)
-        {
-            Debug.Log($"Arrow damaged: {collision.gameObject.name}");
-            target.TakeDamage((int)damage);
-            NetworkServer.Destroy(gameObject);
-        }
-        else
-        {
-            // Duvara saplanma veya hasar almayan bir objeye çarpma
-            Debug.Log($"Arrow hit NON-Damageable: {collision.gameObject.name}");
-            NetworkServer.Destroy(gameObject);
-        }
+        HandleHit(collision.collider, collision.transform);
     }
 
-    // Trigger Logic (CharacterController bazen Trigger gibi davranabilir veya hit boxlar trigger olabilir)
     private void OnTriggerEnter(Collider other)
     {
-        // Debug.Log($"Arrow Trigger Hit: {other.name}");
+        HandleHit(other, other.transform);
+    }
 
-        if (!isServer) return;
+    private void HandleHit(Collider other, Transform hitTransform)
+    {
+        if (!isServer || hasHit) return;
 
+        // Ignore Self & Shooter
         if (other.GetComponent<BallisticProjectile>()) return;
-        if (other.GetComponent<BallisticProjectile>()) return;
-        
-        // Vuran kişiye (shooter) çarpma
         if (shooter != null && (other.gameObject == shooter || other.transform.IsChildOf(shooter.transform))) return;
 
-        // DOST ATEŞİ KORUMASI:
-        if (shooter != null && shooter.GetComponent<UnitMovement>() != null && other.GetComponentInParent<UnitMovement>() != null) return;
-        if (shooter != null && shooter.GetComponent<EnemyAI>() != null && other.GetComponentInParent<EnemyAI>() != null) return;
+        // --- FRIENDLY FIRE CHECK ---
+        bool isShooterPlayerSide = (shooter != null && (shooter.GetComponent<UnitMovement>() != null || shooter.GetComponent<PlayerController>() != null));
+        bool isHitPlayerSide = (other.GetComponentInParent<UnitMovement>() != null || other.GetComponentInParent<PlayerController>() != null);
+        
+        bool isShooterEnemy = (shooter != null && shooter.GetComponent<EnemyAI>() != null);
+        bool isHitEnemy = (other.GetComponentInParent<EnemyAI>() != null);
 
+        // Dost Ateşi: Player/Unit -> Player/Unit VURAMAZ
+        if (isShooterPlayerSide && isHitPlayerSide) return;
+
+        // Düşman Ateşi: Enemy -> Enemy VURAMAZ
+        if (isShooterEnemy && isHitEnemy) return;
+
+        hasHit = true;
+
+        // --- DAMAGE ---
         IDamageable target = other.GetComponentInParent<IDamageable>();
         if (target != null)
         {
-            Debug.Log($"Arrow damaged (Trigger): {other.name}");
             target.TakeDamage((int)damage, transform.position);
-            NetworkServer.Destroy(gameObject);
         }
+
+        // --- STICK LOGIC (Saplama) ---
+        StickToTarget(hitTransform);
+    }
+
+    private void StickToTarget(Transform target)
+    {
+        // 1. Fiziği Kapat
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+        // 2. DOTween'i Durdur (Eğer hala havadaysa)
+        transform.DOKill();
+
+        // 3. Hedefe Yapış (Parent)
+        // Network objesi olduğu için transform.parent yapmak bazen sorun olabilir ama
+        // görsel olarak ClientRpc ile de yapılabilir. Basitçe Server'da yapalım:
+        transform.SetParent(target);
+
+        // 4. Yok Olma (Süre tanı)
+        // NetworkServer.Destroy yerine 10 saniye sonra yok et
+        StartCoroutine(DestroyAfterDelay(10f));
+        
+        // Clientlara da bildir (Görsel güncellemeler için - Opsiyonel)
+        RpcStick(target);
+    }
+
+    [ClientRpc]
+    private void RpcStick(Transform target)
+    {
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+        
+        transform.DOKill();
+        transform.SetParent(target);
+    }
+
+    [Server]
+    private System.Collections.IEnumerator DestroyAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        NetworkServer.Destroy(gameObject);
     }
 }

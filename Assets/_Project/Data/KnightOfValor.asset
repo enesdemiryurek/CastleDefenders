@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2c3c94769a940349acccb75f63b3265, type: 3}
   m_Name: KnightOfValor
   m_EditorClassIdentifier: 
-  characterName: 
-  icon: {fileID: 0}
-  characterPrefab: {fileID: 0}
+  characterName: KnightOfValor
+  icon: {fileID: 21300000, guid: ad60a72281f505542bc21018aedb1d34, type: 3}
+  characterPrefab: {fileID: 4302354821527308069, guid: 2dd79b339daf62f40b9a49ab4389b9f3, type: 3}
   description: 

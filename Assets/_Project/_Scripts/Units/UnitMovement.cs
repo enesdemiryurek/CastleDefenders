@@ -95,11 +95,19 @@ public class UnitMovement : NetworkBehaviour
     private bool chargingWindupActive;
 
     private float lastDecisionTime;
+    private bool isAttackMoving = false; // Attack Move durumu
 
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         attacker = GetComponent<UnitAttack>();
+
+        // Health eventine abone ol
+        Health health = GetComponent<Health>();
+        if (health != null)
+        {
+            health.OnDeath += OnDeathHandler;
+        }
 
         // Animator bul (Model düzeltme için)
         if (modelTransform == null)
@@ -156,13 +164,14 @@ public class UnitMovement : NetworkBehaviour
     // --- Actions ---
 
     [Server]
-    public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false)
+    public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false, bool attackMove = false)
     {
         // Debug.Log($"[Server] Unit Moving To: {position}");
         currentState = UnitState.Moving; 
         guardPosition = position;
         guardRotation = lookRotation; // Rotasyonu kaydet
         currentTarget = null; 
+        isAttackMoving = attackMove; // Attack Move durumunu kaydet
         
         TrySetDestination(position);
     }
@@ -208,8 +217,34 @@ public class UnitMovement : NetworkBehaviour
 
     private void OnDestroy()
     {
+        Health health = GetComponent<Health>();
+        if (health != null) health.OnDeath -= OnDeathHandler;
+
         // Kayıt Silme
         if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
+    }
+
+    private void OnDeathHandler()
+    {
+        // ÖLÜM MANTIĞI: Her şeyi durdur
+        currentState = UnitState.Idle;
+        StopAllCoroutines();
+        
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+            agent.enabled = false; // NavMesh bağlantısını kes
+        }
+
+        // Collider'ı kapat (Cesetlerin içinden geçilebilsin)
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+        
+        // Bu scripti devre dışı bırak (Update çalışmasın)
+        this.enabled = false;
+        
+        Debug.Log($"[Unit {netId}] Unit Died. AI Disabled.");
     }
 
     [Server]
@@ -382,7 +417,8 @@ public class UnitMovement : NetworkBehaviour
 
         // Yeni Hedef Ara (Sadece Vurabileceği mesafedekiler - Dizilişi bozmamak için)
         // Stand Your Ground: Sadece attackRange içindekilere saldır, uzaktakine gitme.
-        Transform found = AcquireTarget(guardRange); // Geniş ara, ama EngageTarget gitmeyecek.
+        float scanningRange = Mathf.Max(guardRange, attacker.GetRange()); // Okçuysan uzağı gör
+        Transform found = AcquireTarget(scanningRange); // Geniş ara, ama EngageTarget gitmeyecek.
         
         if (found != null)
         {
@@ -456,6 +492,22 @@ public class UnitMovement : NetworkBehaviour
 
     private void HandleMoving()
     {
+        // ATTACK MOVE KONTROLÜ
+        if (isAttackMoving)
+        {
+            // Yürürken etrafı tara (15 metre menzil - Aggro Range)
+            Transform found = AcquireTarget(15f);
+            if (found != null)
+            {
+                // Düşman bulduk! Hareketi kes ve savaş
+                // Guarding moduna geçince zaten engage edecek
+                currentState = UnitState.Guarding;
+                currentTarget = found;
+                EngageTarget(found);
+                return;
+            }
+        }
+
         // Hedef yoksa Idle
         if (!guardPosition.HasValue)
         {
@@ -470,6 +522,7 @@ public class UnitMovement : NetworkBehaviour
         {
             StopMovement();
             currentState = UnitState.Guarding; // Nöbete başla
+            isAttackMoving = false; // Vardığımız için Attack Move bitti
             
             // Hemen dönmeye başla (Manuel Rotation)
             if (guardRotation.HasValue) 
@@ -514,6 +567,11 @@ public class UnitMovement : NetworkBehaviour
 
     private void EvaluateHitResults(Collider[] hits, ref Transform bestTarget, ref float bestDistance)
     {
+        // Ranged için Rastgelelik (Distributed Fire)
+        bool isRanged = (attacker != null && attacker.GetRange() > 5.0f); // 5m üstüne Ranged kabul edelim
+        System.Collections.Generic.List<Transform> rangedCandidates = null;
+        if (isRanged) rangedCandidates = new System.Collections.Generic.List<Transform>();
+
         foreach (var hit in hits)
         {
             if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
@@ -531,10 +589,36 @@ public class UnitMovement : NetworkBehaviour
             Transform candidate = identity != null ? identity.transform : hit.transform;
 
             float dist = Vector3.Distance(transform.position, candidate.position);
-            if (dist < bestDistance)
+            
+            if (isRanged)
             {
-                bestDistance = dist;
-                bestTarget = candidate;
+                // Menzildeyse listeye ekle (En yakın olması şart değil)
+                // Ama çok uzaktakileri de almayalım (Range check zaten OverlapSphere ile yapıldı)
+                rangedCandidates.Add(candidate);
+            }
+            else
+            {
+                // Melee: En yakını bul
+                if (dist < bestDistance)
+                {
+                    bestDistance = dist;
+                    bestTarget = candidate;
+                }
+            }
+        }
+
+        // Ranged ise Listeden Rastgele Seç
+        if (isRanged && rangedCandidates != null && rangedCandidates.Count > 0)
+        {
+            // Eğer hali hazırda bir hedefo varsa ve hala geçerliyse
+            // %70 ihtimalle onu değiştirmesin (Sürekli hedef değiştirmesin)
+            if (currentTarget != null && rangedCandidates.Contains(currentTarget) && Random.value > 0.3f)
+            {
+                bestTarget = currentTarget;
+            }
+            else
+            {
+                bestTarget = rangedCandidates[Random.Range(0, rangedCandidates.Count)];
             }
         }
     }

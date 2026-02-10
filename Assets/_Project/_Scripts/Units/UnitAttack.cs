@@ -12,12 +12,13 @@ public class UnitAttack : NetworkBehaviour
     
     [Header("Ranged Settings")]
     [SerializeField] private bool isRanged = false;
+    [SerializeField] private float rangedAttackRange = 25.0f; // Okçular için uzun menzil
     [SerializeField] private GameObject projectilePrefab;
     [SerializeField] private Transform projectileSpawnPoint;
 
     private float lastAttackTime;
     
-    public float GetRange() => attackRange;
+    public float GetRange() => isRanged ? rangedAttackRange : attackRange;
     public void TryAttack(Transform target) => Attack(target.GetComponent<IDamageable>());
     
     // Logic Component Reference (The Brain)

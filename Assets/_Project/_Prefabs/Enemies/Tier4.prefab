@@ -278,7 +278,7 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  aggroRange: 10
+  aggroRange: 50000
   attackRange: 2
   damage: 40
   attackCooldown: 1.5
@@ -326,7 +326,7 @@ Animator:
   m_GameObject: {fileID: 1469475426469140342}
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: 46f60e6b4094dad4799fc28529d6f84c, type: 3}
-  m_Controller: {fileID: 9100000, guid: 14f873b678697f542849faf803a2dfb6, type: 2}
+  m_Controller: {fileID: 9100000, guid: 326b5a052d563ba4f895f7952fefddf0, type: 2}
   m_CullingMode: 1
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -356,6 +356,7 @@ MonoBehaviour:
   maxHealth: 200
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!136 &777134606867979944
 CapsuleCollider:
   m_ObjectHideFlags: 0

@@ -33,6 +33,7 @@ public class PlayerUnitCommander : NetworkBehaviour
     [SerializeField] private GameObject formationMarkerPrefab; 
     private List<GameObject> previewMarkers = new List<GameObject>();
     private bool isCommandMode = false;
+    private bool isAttackCommand = false; // F1: Saldırarak Git
     private Vector3 commandCursorPos; // Sanal cursor pozisyonu (Dünya koordinatlarında)
     private float commandCursorDist = 10f; // Oyuncudan ne kadar uzakta?
     private Quaternion commandRotation; // Formasyonun dönüşü
@@ -79,10 +80,16 @@ public class PlayerUnitCommander : NetworkBehaviour
         if (Keyboard.current.digit2Key.wasPressedThisFrame) ChangeSelection(1);
         if (Keyboard.current.digit3Key.wasPressedThisFrame) ChangeSelection(2);
         
-        // 'X' -> KOMUT MODU (Toggle)
+        // 'X' -> KOMUT MODU (Normal Hareket)
         if (Keyboard.current.xKey.wasPressedThisFrame)
         {
-            ToggleCommandMode(!isCommandMode);
+            ToggleCommandMode(!isCommandMode, false);
+        }
+
+        // 'F1' -> SALDIRI KOMUT MODU (Attack Move)
+        if (Keyboard.current.f1Key.wasPressedThisFrame)
+        {
+            ToggleCommandMode(!isCommandMode, true);
         }
 
         // Eğer Command Mode açıksa, diğer komutları (Attack/Follow) engelle veya modu kapat
@@ -91,7 +98,7 @@ public class PlayerUnitCommander : NetworkBehaviour
             // Sol Tık -> ONAYLA ve GÖNDER
             if (Mouse.current.leftButton.wasPressedThisFrame)
             {
-                CmdMoveUnits(selectedSquadIndex, commandCursorPos, commandRotation);
+                CmdMoveUnits(selectedSquadIndex, commandCursorPos, commandRotation, isAttackCommand);
                 ToggleCommandMode(false); // Moddan çık
             }
 
@@ -117,9 +124,10 @@ public class PlayerUnitCommander : NetworkBehaviour
         }
     }
 
-    private void ToggleCommandMode(bool state)
+    private void ToggleCommandMode(bool state, bool isAttack = false)
     {
         isCommandMode = state;
+        isAttackCommand = isAttack;
         
         // Oyuncuyu Kilitle/Aç
         PlayerController pc = GetComponent<PlayerController>();
@@ -141,9 +149,12 @@ public class PlayerUnitCommander : NetworkBehaviour
         }
         else
         {
+            if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
             ClearPreview();
         }
     }
+
+    private GameObject chargePathIndicator;
 
     private void UpdateCommandModeLogic()
     {
@@ -188,7 +199,78 @@ public class PlayerUnitCommander : NetworkBehaviour
         }
 
         // 2. Görselleştirme (Preview)
-        UpdatePreviewVisuals();
+        if (isAttackCommand)
+        {
+            UpdateChargePathVisuals();
+        }
+        else
+        {
+            if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
+            UpdatePreviewVisuals();
+        }
+    }
+
+    private void UpdateChargePathVisuals()
+    {
+        ClearPreview(); // Ghostları gizle
+
+        // 1. Squad Merkezini Bul
+        Vector3 squadCenter = Vector3.zero;
+        int count = 0;
+        float squadWidth = 5.0f; // Tahmini genişlik
+
+        foreach(var u in myUnits)
+        {
+             if(u != null && u.SquadIndex == selectedSquadIndex)
+             {
+                 squadCenter += u.transform.position;
+                 count++;
+             }
+        }
+
+        if (count > 0) 
+        {
+            squadCenter /= count;
+            squadWidth = Mathf.Sqrt(count) * 1.5f; // Karekök hesabı (yaklaşık)
+        }
+        else
+        {
+            squadCenter = transform.position; // Asker yoksa oyuncudan al
+        }
+
+        // 2. Indicator Oluştur (Yoksa)
+        if (chargePathIndicator == null)
+        {
+            chargePathIndicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(chargePathIndicator.GetComponent<Collider>());
+            chargePathIndicator.GetComponent<Renderer>().material.color = new Color(1f, 0f, 0f, 0.3f); // Yarı saydam kırmızı
+        }
+
+        chargePathIndicator.SetActive(true);
+
+        // 3. Pozisyon ve Ölçek Ayarla
+        // Başlangıç: squadCenter
+        // Bitiş: commandCursorPos
+        
+        Vector3 direction = commandCursorPos - squadCenter;
+        direction.y = 0; // Yere paralel
+        float distance = direction.magnitude;
+        
+        if (distance < 0.1f) distance = 0.1f;
+
+        // Position: Orta Nokta
+        chargePathIndicator.transform.position = squadCenter + (direction.normalized * (distance / 2f)) + Vector3.up * 0.1f;
+        
+        // Rotation: Hedefe dön
+        if (direction != Vector3.zero)
+        {
+            chargePathIndicator.transform.rotation = Quaternion.LookRotation(direction);
+        }
+
+        // Scale: Boyuna uza, Enine sabit (squadWidth kadar)
+        // Kullanıcı isteği: "Boyuna büyüyecek enine değil"
+        // Enine sabit (squadWidth), Boyuna (distance)
+        chargePathIndicator.transform.localScale = new Vector3(squadWidth, 0.1f, distance);
     }
 
     private void UpdatePreviewVisuals()
@@ -208,6 +290,8 @@ public class PlayerUnitCommander : NetworkBehaviour
         // 3. Markerları Yerleştir
         EnsureMarkerPool(points.Count);
 
+        Color previewColor = isAttackCommand ? Color.red : Color.green; // Kırmızı = Saldırı, Yeşil = Hareket
+
         for (int i = 0; i < previewMarkers.Count; i++)
         {
             if (i < points.Count)
@@ -223,6 +307,10 @@ public class PlayerUnitCommander : NetworkBehaviour
                 
                 previewMarkers[i].transform.position = p;
                 previewMarkers[i].transform.rotation = commandRotation;
+
+                // Rengi Güncelle
+                Renderer r = previewMarkers[i].GetComponent<Renderer>();
+                if (r != null) r.material.color = new Color(previewColor.r, previewColor.g, previewColor.b, 0.5f);
             }
             else
             {
@@ -249,7 +337,6 @@ public class PlayerUnitCommander : NetworkBehaviour
                 marker.transform.localScale = Vector3.one * 0.5f;
                 // Collider'ı sil ki Raycast'i engellemesin
                 Destroy(marker.GetComponent<Collider>());
-                marker.GetComponent<Renderer>().material.color = new Color(0, 0.5f, 1f, 0.5f); // Mavi
             }
             previewMarkers.Add(marker);
         }
@@ -343,8 +430,10 @@ public class PlayerUnitCommander : NetworkBehaviour
     }
 
     [Command]
-    private void CmdMoveUnits(int squadIndex, Vector3 targetPosition, Quaternion formationRotation)
+    private void CmdMoveUnits(int squadIndex, Vector3 targetPosition, Quaternion formationRotation, bool attackMove)
     {
+        Debug.Log($"[CmdMoveUnits] Called! Squad:{squadIndex}, Target:{targetPosition}, AttackMove:{attackMove}");
+        
         // Bu grup için takip modunu kapat
         if (followingSquads.Contains(squadIndex))
         {
@@ -354,16 +443,30 @@ public class PlayerUnitCommander : NetworkBehaviour
         myUnits.RemoveAll(u => u == null);
         
         var selectedUnits = myUnits.FindAll(u => u.SquadIndex == squadIndex);
+        Debug.Log($"[CmdMoveUnits] Found {selectedUnits.Count} units for squad {squadIndex}");
+        
         if (selectedUnits.Count == 0) return;
 
-        // Shared Math ile aynı noktaları hesapla
-        List<Vector3> points = CalculateFormationPoints(targetPosition, formationRotation, selectedUnits.Count, 1.1f);
-        
-        for (int i = 0; i < selectedUnits.Count; i++)
+        if (attackMove)
         {
-            if (i < points.Count)
+            // F1 CHARGE LOGIC: Hepsi aynı noktaya koşsun (Bodoslama)
+            Debug.Log($"[CmdMoveUnits] CHARGE MODE - Sending {selectedUnits.Count} units to {targetPosition}");
+            foreach (var unit in selectedUnits)
             {
-                selectedUnits[i].MoveTo(points[i], formationRotation, true);
+                unit.MoveTo(targetPosition, formationRotation, false, true); // Formation yok, Attack Move aktif
+            }
+        }
+        else
+        {
+            // X NORMAL MOVE LOGIC: Formasyon hesapla
+            List<Vector3> points = CalculateFormationPoints(targetPosition, formationRotation, selectedUnits.Count, 1.1f);
+            
+            for (int i = 0; i < selectedUnits.Count; i++)
+            {
+                if (i < points.Count)
+                {
+                    selectedUnits[i].MoveTo(points[i], formationRotation, true, false);
+                }
             }
         }
     }

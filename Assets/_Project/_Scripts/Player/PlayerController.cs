@@ -13,6 +13,9 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private float gravity = -20f; // Gravity arttirilabilir, daha tok hissiyat icin
     [SerializeField] private float rotationSpeed = 10f;
     
+    [Header("Interaction Settings")]
+    [SerializeField] private float interactionDistance = 3f;
+
     [Header("Climbing Settings")]
     [SerializeField] private float climbSpeed = 4f;
     private bool canClimb = false;
@@ -92,11 +95,20 @@ public class PlayerController : NetworkBehaviour
         // 1. Client Authority Check
         if (!isLocalPlayer) return;
 
-        // Tırmanma Başlatma/Bitirme
-        if (canClimb && InputEnabled && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        // --- INTERACTION (E Key) ---
+        if (InputEnabled && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
         {
-            isClimbing = !isClimbing;
-            if(isClimbing) velocity = Vector3.zero; // Hızı sıfırla ki düşmeyelim
+            // 1. Priority: Climbing (Zone Check)
+            if (canClimb)
+            {
+                isClimbing = !isClimbing;
+                if(isClimbing) velocity = Vector3.zero; // Hızı sıfırla ki düşmeyelim
+            }
+            // 2. Priority: General Interaction (Raycast - Gate etc.)
+            else
+            {
+                HandleInteraction();
+            }
         }
         
         HandleMovement();
@@ -253,6 +265,24 @@ public class PlayerController : NetworkBehaviour
         {
             canClimb = false;
             isClimbing = false; // Alandan çıkınca düşersin (veya inersin)
+        }
+    }
+
+    private void HandleInteraction()
+    {
+        // Kamera merkezinden ileriye raycast at
+        if (PlayerCamera.Instance != null)
+        {
+            Ray ray = new Ray(PlayerCamera.Instance.transform.position, PlayerCamera.Instance.transform.forward);
+            if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance))
+            {
+                // GateController var mı?
+                GateController gate = hit.collider.GetComponentInParent<GateController>();
+                if (gate != null)
+                {
+                    gate.CmdInteract();
+                }
+            }
         }
     }
 }
