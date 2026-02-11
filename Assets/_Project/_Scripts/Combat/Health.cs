@@ -13,7 +13,7 @@ public class Health : NetworkBehaviour, IDamageable
 
     [Header("Debug")]
     public bool destroyOnDeath = true;
-    public float deathDelay = 3.0f; // Animasyon için zaman tanı
+    public float deathDelay = 20.0f; // Animasyon için zaman tanı (User Request: 20s)
 
     public event System.Action OnDeath;
     public event System.Action OnRevive; // İleride gerekebilir

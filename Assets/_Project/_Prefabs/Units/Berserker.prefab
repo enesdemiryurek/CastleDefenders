@@ -614,13 +614,11 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  attackRange: 2
   damage: 30
+  attackRange: 2
   attackCooldown: 1.8
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 8
   isRanged: 0
+  rangedAttackRange: 25
   projectilePrefab: {fileID: 0}
   projectileSpawnPoint: {fileID: 0}
 --- !u!114 &-7056594156698821183
@@ -666,6 +664,7 @@ MonoBehaviour:
   maxHealth: 200
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!114 &-8562871257524031122
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -681,19 +680,21 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  detectionRadius: 20
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 8
+  currentState: 0
+  SquadIndex: 0
+  guardRange: 10
   updateInterval: 0.5
-  terrainHeightCorrection: 0
+  enemyLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  chargeAggroRange: 500
+  chargeWindup: 1
+  chargeTriggerName: Charge
   modelTransform: {fileID: 0}
   groundLayer:
     serializedVersion: 2
     m_Bits: 4294967295
   alignmentSpeed: 10
-  SquadIndex: 0
-  rotationSpeed: 5
 --- !u!114 &7549807733024559745
 MonoBehaviour:
   m_ObjectHideFlags: 0

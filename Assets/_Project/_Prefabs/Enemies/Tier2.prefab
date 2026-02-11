@@ -285,7 +285,7 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  aggroRange: 10
+  aggroRange: 50000
   attackRange: 2
   damage: 10
   attackCooldown: 1.5
@@ -375,6 +375,7 @@ MonoBehaviour:
   maxHealth: 100
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!136 &-5498957908289058209
 CapsuleCollider:
   m_ObjectHideFlags: 0

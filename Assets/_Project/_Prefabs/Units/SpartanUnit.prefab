@@ -298,13 +298,11 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  attackRange: 2
   damage: 15
+  attackRange: 2
   attackCooldown: 1
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 8
   isRanged: 0
+  rangedAttackRange: 25
   projectilePrefab: {fileID: 0}
   projectileSpawnPoint: {fileID: 0}
 --- !u!114 &-7086662068351860281
@@ -325,6 +323,7 @@ MonoBehaviour:
   maxHealth: 100
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 0}
 --- !u!114 &8327574855045359525
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -436,19 +435,21 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  detectionRadius: 20
-  enemyLayer:
-    serializedVersion: 2
-    m_Bits: 8
+  currentState: 0
+  SquadIndex: 0
+  guardRange: 10
   updateInterval: 0.5
-  terrainHeightCorrection: 0
+  enemyLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  chargeAggroRange: 500
+  chargeWindup: 1
+  chargeTriggerName: Charge
   modelTransform: {fileID: 0}
   groundLayer:
     serializedVersion: 2
     m_Bits: 64
   alignmentSpeed: 10
-  SquadIndex: 0
-  rotationSpeed: 5
 --- !u!4 &5695694882345091813 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 283586b1798bbd84d986889a7119d6fd, type: 3}
@@ -556,43 +557,43 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.011438452
+      value: 0.011196934
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.31735015
+      value: 0.31727603
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.040358048
+      value: 0.04030974
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.2578921
+      value: 0.15581727
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.8370916
+      value: 0.85091573
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.028909426
+      value: -0.08866949
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.48159483
+      value: -0.49376225
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: -207.362
+      value: -190.231
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: -296.99402
+      value: -298.121
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 13.014008
+      value: 18.041
       objectReference: {fileID: 0}
     - target: {fileID: -7511558181221131132, guid: 43d680a66146755428b97bb42159b473, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'

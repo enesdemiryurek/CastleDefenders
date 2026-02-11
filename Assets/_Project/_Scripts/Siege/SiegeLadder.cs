@@ -57,12 +57,12 @@ public class SiegeLadder : MonoBehaviour
             NavMeshHit hit;
             if (!NavMesh.SamplePosition(startPoint.position, out hit, 1.0f, NavMesh.AllAreas))
             {
-                Debug.LogError($"[SiegeLadder] ❌ HATA: 'Start Point' (Zemin) NavMesh üzerinde değil! Lütfen Bake al veya noktayı yere yaklaştır.");
+                Debug.LogWarning($"[SiegeLadder] ⚠️ UYARI: 'Start Point' (Zemin) NavMesh üzerinde değil! Lütfen Bake al veya noktayı yere yaklaştır.");
             }
             
             if (!NavMesh.SamplePosition(endPoint.position, out hit, 1.0f, NavMesh.AllAreas))
             {
-                Debug.LogError($"[SiegeLadder] ❌ HATA: 'End Point' (Sur Tepesi) NavMesh üzerinde değil! SUR DUVARINI 'Static' yapıp BAKE aldın mı?");
+                Debug.LogWarning($"[SiegeLadder] ⚠️ UYARI: 'End Point' (Sur Tepesi) NavMesh üzerinde değil! SUR DUVARINI 'Static' yapıp BAKE aldın mı?");
             }
             else
             {

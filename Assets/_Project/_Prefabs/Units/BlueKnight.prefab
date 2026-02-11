@@ -346,8 +346,10 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   damage: 15
+  attackRange: 4
   attackCooldown: 1
   isRanged: 0
+  rangedAttackRange: 25
   projectilePrefab: {fileID: 0}
   projectileSpawnPoint: {fileID: 0}
 --- !u!114 &1631324455799094665
@@ -368,6 +370,7 @@ MonoBehaviour:
   maxHealth: 100
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!114 &1882438861494316488
 MonoBehaviour:
   m_ObjectHideFlags: 0
