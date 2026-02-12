@@ -343,6 +343,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4903272500610555567}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -1639830579610454755}
   m_SourcePrefab: {fileID: 100100000, guid: 90b55eee6a8f0744d87b0e292f183539, type: 3}
 --- !u!95 &2552935766839762539 stripped
 Animator:
@@ -495,7 +498,7 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   maxHealth: 100
-  destroyOnDeath: 1
+  destroyOnDeath: 0
   deathDelay: 3
   bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!114 &-9102493913573576753
@@ -549,3 +552,26 @@ MonoBehaviour:
   serverOnly: 0
   visibility: 0
   hasSpawned: 0
+--- !u!136 &-1639830579610454755
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9135030631906025131}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5
+  m_Height: 1
+  m_Direction: 1
+  m_Center: {x: 0, y: 0, z: 0}

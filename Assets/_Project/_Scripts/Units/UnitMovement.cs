@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 using UnityEngine.AI;
@@ -14,6 +15,7 @@ public class UnitMovement : NetworkBehaviour
     [SyncVar] public int SquadIndex;
 
     [Header("Settings")]
+    [SerializeField] public float moveSpeed = 3.5f; // Koşma Hızı (Inspector'dan ayarlanır)
     [SerializeField] private float guardRange = 10f; // Savunmadayken ne kadar uzağa baksın?
     [SerializeField] private float updateInterval = 0.25f; // Saniyede 4 kez karar ver
 
@@ -22,6 +24,7 @@ public class UnitMovement : NetworkBehaviour
     [SerializeField] private float chargeAggroRange = 500f; 
     [SerializeField] private float chargeWindup = 1.0f; // Geri geldi (1 saniye)
     [SerializeField] private string chargeTriggerName = "Charge";
+
 
     private IEnumerator TryRegisterCommander()
     {
@@ -166,7 +169,7 @@ public class UnitMovement : NetworkBehaviour
     [Server]
     public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false, bool attackMove = false)
     {
-        // Debug.Log($"[Server] Unit Moving To: {position}");
+        // Debug.Log($"[Unit {netId}] MoveTo called! Pos:{position}, AttackMove:{attackMove}, CurrentState:{currentState}");
         currentState = UnitState.Moving; 
         guardPosition = position;
         guardRotation = lookRotation; // Rotasyonu kaydet
@@ -215,37 +218,7 @@ public class UnitMovement : NetworkBehaviour
          if(currentState == UnitState.Charging) currentState = UnitState.Guarding;
     }
 
-    private void OnDestroy()
-    {
-        Health health = GetComponent<Health>();
-        if (health != null) health.OnDeath -= OnDeathHandler;
 
-        // Kayıt Silme
-        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
-    }
-
-    private void OnDeathHandler()
-    {
-        // ÖLÜM MANTIĞI: Her şeyi durdur
-        currentState = UnitState.Idle;
-        StopAllCoroutines();
-        
-        if (agent != null && agent.isOnNavMesh)
-        {
-            agent.isStopped = true;
-            agent.velocity = Vector3.zero;
-            agent.enabled = false; // NavMesh bağlantısını kes
-        }
-
-        // Collider'ı kapat (Cesetlerin içinden geçilebilsin)
-        Collider col = GetComponent<Collider>();
-        if (col != null) col.enabled = false;
-        
-        // Bu scripti devre dışı bırak (Update çalışmasın)
-        this.enabled = false;
-        
-        Debug.Log($"[Unit {netId}] Unit Died. AI Disabled.");
-    }
 
     [Server]
     public override void OnStartServer()
@@ -259,6 +232,7 @@ public class UnitMovement : NetworkBehaviour
         // 2. NAVMESH AYARLARI
         if (agent != null)
         {
+            agent.speed = moveSpeed;
             agent.acceleration = 20f; 
             agent.angularSpeed = 2000f; 
             agent.autoBraking = false; 
@@ -402,7 +376,8 @@ public class UnitMovement : NetworkBehaviour
             float distToTarget = Vector3.Distance(transform.position, currentTarget.position);
             
             // Eğer hedef çok uzaklaştıysa veya öldüyse bırak
-            if (distToTarget > guardRange || !currentTarget.gameObject.activeInHierarchy)
+            float limitRange = Mathf.Max(guardRange, attacker.GetRange()); // Okçular için menzili dikkate al
+            if (distToTarget > limitRange || !currentTarget.gameObject.activeInHierarchy)
             {
                 currentTarget = null;
                 // ReturnToPost(); // Gerek yok, zaten yerindeyiz (hareket etmiyoruz)
@@ -418,16 +393,32 @@ public class UnitMovement : NetworkBehaviour
         // Yeni Hedef Ara (Sadece Vurabileceği mesafedekiler - Dizilişi bozmamak için)
         // Stand Your Ground: Sadece attackRange içindekilere saldır, uzaktakine gitme.
         float scanningRange = Mathf.Max(guardRange, attacker.GetRange()); // Okçuysan uzağı gör
-        Transform found = AcquireTarget(scanningRange); // Geniş ara, ama EngageTarget gitmeyecek.
+        
+        // Eğer HÜCUM MODUNDAYSA: Dolu hedefleri pas geç (Swarm Filter)
+        System.Predicate<Transform> filter = isAttackMoving ? (t => !IsTargetOverwhelmed(t)) : null;
+        
+        Transform found = AcquireTarget(scanningRange, filter); // Geniş ara, ama EngageTarget gitmeyecek.
         
         if (found != null)
         {
+            // Hücum modunda Swarm Limit için kayıt olalım (HandleMoving'de olduğu gibi)
+            if (isAttackMoving) RegisterEngagement(found);
+            
             currentTarget = found;
             EngageTarget(currentTarget);
         }
         else
         {
-            // Hedef yoksa, pozisyonun biraz kaydıysa düzelt (Micro-correction)
+            // Hedef yoksa...
+            if (isAttackMoving)
+            {
+                // HÜCUM MANTIĞI: Düşman bitti ama hala menzile girmedik veya yolumuza devam etmeliyiz.
+                // Guarding'de beklemek yerine KOŞMAYA DEVAM ET!
+                currentState = UnitState.Moving;
+                return;
+            }
+
+            // Normal Mode: Pozisyonun biraz kaydıysa düzelt (Micro-correction)
             ReturnToPost();
             
             // Rotasyonu Koru (Formation Facing - Enemy yoksa öne bak)
@@ -490,17 +481,53 @@ public class UnitMovement : NetworkBehaviour
         if(!agent.isOnNavMesh && Time.frameCount % 60 == 0) Debug.LogWarning($"[Unit {netId}] NavMesh üzerinde değil!");
     }
 
+    // --- SWARMING LOGIC ---
+    private static Dictionary<Transform, int> activeEngagements = new Dictionary<Transform, int>();
+
+    private void RegisterEngagement(Transform target)
+    {
+        if (target == null) return;
+        if (!activeEngagements.ContainsKey(target)) activeEngagements[target] = 0;
+        activeEngagements[target]++;
+    }
+
+    private void UnregisterEngagement(Transform target)
+    {
+        if (target == null) return;
+        if (activeEngagements.ContainsKey(target))
+        {
+            activeEngagements[target]--;
+            if (activeEngagements[target] <= 0) activeEngagements.Remove(target);
+        }
+    }
+
+    private bool IsTargetOverwhelmed(Transform target)
+    {
+        if (target == null) return false;
+        return activeEngagements.ContainsKey(target) && activeEngagements[target] >= 3;
+    }
+
     private void HandleMoving()
     {
+        // Debug.Log($"[Unit {netId}] HandleMoving - isAttackMoving:{isAttackMoving}, guardPos:{guardPosition}, State:{currentState}");
+        
         // ATTACK MOVE KONTROLÜ
         if (isAttackMoving)
         {
-            // Yürürken etrafı tara (15 metre menzil - Aggro Range)
-            Transform found = AcquireTarget(15f);
+            // HIZLANDIR (Charge Effect - 1.2x)
+            if(agent.isOnNavMesh) agent.speed = moveSpeed * 1.2f; 
+
+            // Filtereli Arama: Üzerinde 3 kişiden az olan EN YAKIN düşmanı bul (10m Menzil)
+            // Eğer hepsi doluysa null döner -> Koşmaya devam ederiz.
+            Transform found = AcquireTarget(10f, t => !IsTargetOverwhelmed(t)); 
+
             if (found != null)
             {
                 // Düşman bulduk! Hareketi kes ve savaş
-                // Guarding moduna geçince zaten engage edecek
+                if(agent.isOnNavMesh) agent.speed = moveSpeed; // Hızı normale döndür
+                
+                RegisterEngagement(found); // Kayıt ol
+                
                 currentState = UnitState.Guarding;
                 currentTarget = found;
                 EngageTarget(found);
@@ -533,11 +560,12 @@ public class UnitMovement : NetworkBehaviour
         else
         {
             // Yürümeye devam
+            // Debug.Log($"[Unit {netId}] Continuing to move. Distance: {dist}");
             TrySetDestination(guardPosition.Value);
         }
     }
 
-    private Transform AcquireTarget(float range)
+    private Transform AcquireTarget(float range, System.Predicate<Transform> verificationCallback = null)
     {
         Transform bestTarget = null;
         float bestDistance = range;
@@ -545,7 +573,8 @@ public class UnitMovement : NetworkBehaviour
         if (BattleManager.Instance != null)
         {
             Transform bmTarget = BattleManager.Instance.GetNearestEnemyForUnit(transform.position, range);
-            if (bmTarget != null)
+            // BattleManager target'ı da callback'ten geçir
+            if (bmTarget != null && (verificationCallback == null || verificationCallback(bmTarget)))
             {
                 bestTarget = bmTarget;
                 bestDistance = Vector3.Distance(transform.position, bmTarget.position);
@@ -553,19 +582,19 @@ public class UnitMovement : NetworkBehaviour
         }
 
         Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayerMask);
-        EvaluateHitResults(hits, ref bestTarget, ref bestDistance);
+        EvaluateHitResults(hits, ref bestTarget, ref bestDistance, verificationCallback);
 
         // Eğer maskeden sonuç yoksa, son çare tüm layer'larda ara (dostları yine filtreleyecek)
         if (bestTarget == null)
         {
             Collider[] anyHits = Physics.OverlapSphere(transform.position, range, ~0);
-            EvaluateHitResults(anyHits, ref bestTarget, ref bestDistance);
+            EvaluateHitResults(anyHits, ref bestTarget, ref bestDistance, verificationCallback);
         }
 
         return bestTarget;
     }
 
-    private void EvaluateHitResults(Collider[] hits, ref Transform bestTarget, ref float bestDistance)
+    private void EvaluateHitResults(Collider[] hits, ref Transform bestTarget, ref float bestDistance, System.Predicate<Transform> verificationCallback)
     {
         // Ranged için Rastgelelik (Distributed Fire)
         bool isRanged = (attacker != null && attacker.GetRange() > 5.0f); // 5m üstüne Ranged kabul edelim
@@ -587,6 +616,9 @@ public class UnitMovement : NetworkBehaviour
 
             NetworkIdentity identity = hit.GetComponentInParent<NetworkIdentity>();
             Transform candidate = identity != null ? identity.transform : hit.transform;
+
+            // CUSTOM SORGULAR (Örn: Swarm Limit)
+            if (verificationCallback != null && !verificationCallback(candidate)) continue;
 
             float dist = Vector3.Distance(transform.position, candidate.position);
             
@@ -626,7 +658,7 @@ public class UnitMovement : NetworkBehaviour
     private void EngageTarget(Transform target)
     {
         float dist = Vector3.Distance(transform.position, target.position);
-        float attackRange = 2.0f; // UnitAttack'tan çekilebilir aslında
+        float attackRange = attacker != null ? attacker.GetRange() : 2.0f; // Gerçek menzili kullan
 
         if (dist <= attackRange)
         {
@@ -637,9 +669,15 @@ public class UnitMovement : NetworkBehaviour
         else
         {
             // Yaklaş
-            // STAND YOUR GROUND: Eğer Guarding modundaysak ASLA hareket etme!
-            if (currentState != UnitState.Guarding)
+            // Yaklaş
+            // STAND YOUR GROUND: Normal Guarding modunda hareket etme!
+            // AMA ATTACK MOVE ise (isAttackMoving) saldır, kovala!
+            if (currentState != UnitState.Guarding || isAttackMoving)
             {
+                if (isAttackMoving && agent.isOnNavMesh) 
+                {
+                    currentState = UnitState.Chasing; // Aktif takip moduna geç
+                }
                 MoveToTarget(target);
             }
             else
@@ -651,14 +689,77 @@ public class UnitMovement : NetworkBehaviour
         }
     }
 
+    private void OnDestroy()
+    {
+        UnregisterEngagement(currentTarget);
+
+        Health health = GetComponent<Health>();
+        if (health != null) health.OnDeath -= OnDeathHandler;
+
+        // Kayıt Silme
+        if (BattleManager.Instance != null) BattleManager.Instance.UnregisterPlayerUnit(this);
+    }
+
+    private void OnDeathHandler()
+    {
+        UnregisterEngagement(currentTarget);
+
+        // Death Animation
+        Animator anim = GetComponentInChildren<Animator>();
+        if(anim != null) 
+        {
+            anim.enabled = true; // Animasyon oynasın
+            anim.SetTrigger("Death");
+            // Diğer trigger'ları temizle ki çakışmasın
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("Charge");
+        }
+        
+        if(agent != null) agent.enabled = false;
+        
+        Collider col = GetComponent<Collider>();
+        if(col != null) col.enabled = false; // Cesedin içinden geçilebilsin
+
+        // Rigidbody EKLEME! (Animasyon ile yere düşecek)
+        // Eğer Rigidbody eklersek collider kapalı olduğu için mapten aşağı düşer.
+
+        // AI Kapat (Artık düşünmesin)
+        enabled = false;
+        currentState = UnitState.Idle; 
+
+        // Ceset Yönetimi (Sınır: 30)
+        if (CorpseManager.Instance != null) 
+        {
+            CorpseManager.Instance.RegisterCorpse(gameObject);
+        }
+        else
+        {
+            // Manager yoksa fallback
+            Destroy(gameObject, 30f);
+        }
+        
+        Debug.Log($"[Unit {netId}] Unit Died. Playing Death Animation.");
+        
+        Debug.Log($"[Unit {netId}] Unit Died. AI Disabled.");
+    }
+
     private void MoveToTarget(Transform target)
     {
+        // Eğer yeni bir hedefe hareket ediyorsak, mevcut hedefi bırak
+        if (currentTarget != null && currentTarget != target)
+        {
+            UnregisterEngagement(currentTarget);
+        }
+        currentTarget = target; // MoveToTarget genellikle bir hedefi takip etmek için kullanılır
         TrySetDestination(target.position);
     }
 
     private void StopMovement()
     {
-        if(agent.isOnNavMesh)
+        UnregisterEngagement(currentTarget);
+        currentTarget = null;
+        
+        if(agent != null && agent.enabled && agent.isOnNavMesh)
         {
             agent.isStopped = true;
             agent.ResetPath();

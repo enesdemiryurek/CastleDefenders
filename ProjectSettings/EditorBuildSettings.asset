@@ -33,5 +33,6 @@ EditorBuildSettings:
     path: "Assets/_Project/_Scenes/Level2K\xF6pr\xFCB\xF6l\xFCm1.unity"
     guid: 2a3dc6549e55e1e4488b7c5be86521d4
   m_configObjects:
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

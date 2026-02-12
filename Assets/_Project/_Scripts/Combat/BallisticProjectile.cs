@@ -25,6 +25,9 @@ public class BallisticProjectile : NetworkBehaviour
     }
 
     private GameObject shooter;
+    
+    [SyncVar] private Vector3 targetPosition;
+    [SyncVar(hook = nameof(OnLaunchStateChanged))] private bool isLaunched;
 
     [Server]
     public void SetShooter(GameObject shooterObj)
@@ -34,31 +37,49 @@ public class BallisticProjectile : NetworkBehaviour
 
     // Server sadece başlatır
     [Server]
-    public void Launch(Vector3 targetPosition)
+    public void Launch(Vector3 targetPos)
     {
-        // Network üzerinden pozisyonu senkronize et
-        RpcLaunch(targetPosition);
+        // Network üzerinden pozisyonu senkronize et (SyncVar ile garanti altına al)
+        if (hasLaunched) return;
+        
+        targetPosition = targetPos;
+        isLaunched = true;
+        
+        // Host için manuel tetikle (Hook bazen Host'ta çalışmaz)
+        // Mirror Hook davranışına göre değişir ama garanti olsun
+        if (isServer && isClient) OnLaunchStateChanged(false, true);
     }
 
-    [ClientRpc]
-    private void RpcLaunch(Vector3 targetPosition)
+    private void OnLaunchStateChanged(bool oldVal, bool newVal)
     {
+        if (newVal && !hasLaunched)
+        {
+            StartProjectileMovement(targetPosition);
+        }
+    }
+
+    private void StartProjectileMovement(Vector3 targetPos)
+    {
+        if (hasLaunched) return;
         hasLaunched = true;
+        
+        // Debug.Log($"[BallisticProjectile] Launching to {targetPos}");
+
+        if(rb == null) rb = GetComponent<Rigidbody>();
         rb.isKinematic = true; // Fizik motorunu kapat (DOTween yönetecek)
         rb.useGravity = false;
         
-        // DOTween/Kinematik hareket için Trigger olması daha garantidir
         Collider col = GetComponent<Collider>();
         if (col != null) col.isTrigger = true;
 
-        float distance = Vector3.Distance(transform.position, targetPosition);
+        float distance = Vector3.Distance(transform.position, targetPos);
         float duration = distance / launchForce; // Mesafeye göre süre belirle
         if (duration < 0.5f) duration = 0.5f; // Çok kısa sürmesin
 
         lastPosition = transform.position;
 
         // DOTween ile Zıplama (Parabol) Hareketi
-        transform.DOJump(targetPosition, 2f, 1, duration)
+        transform.DOJump(targetPos, 2f, 1, duration)
             .SetEase(Ease.Linear)
             .SetLink(gameObject) // GameObject yok olunca Tween'i de öldür (SAFE MODE Hatalarını Çözer)
             .OnUpdate(() => {
@@ -116,6 +137,9 @@ public class BallisticProjectile : NetworkBehaviour
 
         hasHit = true;
 
+        // --- VISUAL SNAP ---
+        SnapToCollider(other);
+
         // --- DAMAGE ---
         IDamageable target = other.GetComponentInParent<IDamageable>();
         if (target != null)
@@ -125,6 +149,24 @@ public class BallisticProjectile : NetworkBehaviour
 
         // --- STICK LOGIC (Saplama) ---
         StickToTarget(hitTransform);
+    }
+    
+    private void SnapToCollider(Collider targetCol)
+    {
+        // Okun burnu biraz içeride kalmış olabilir veya çok dışarıda durmuş olabilir (Trigger yüzünden)
+        // Oku biraz geriye alıp, tekrar ileri Ray atarak tam temas noktasını bulalım.
+        
+        Vector3 direction = transform.forward; // Okun yönü
+        Vector3 startPoint = transform.position - (direction * 0.5f); // 50cm geriden
+        
+        Ray ray = new Ray(startPoint, direction);
+        
+        // Sadece hedef collider'a ray at (LayerMask ile uğraşmayalım, direkt instance check)
+        if (targetCol.Raycast(ray, out RaycastHit hit, 1.0f))
+        {
+             // Tam temas noktasına, hafifçe içeri gömülmüş şekilde taşı
+             transform.position = hit.point + (direction * 0.1f); 
+        }
     }
 
     private void StickToTarget(Transform target)

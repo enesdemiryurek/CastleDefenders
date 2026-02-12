@@ -153,22 +153,45 @@ public class EnemyAI : NetworkBehaviour
 
     private void OnDeathHandler()
     {
+        if (isDead) return;
         isDead = true;
         
+        // 1. Hareket ve Fizik İptal
         if (agent != null)
         {
-            if (agent.isOnNavMesh) 
-            {
-                agent.isStopped = true;
-            }
+            agent.isStopped = true;
             agent.enabled = false; 
         }
 
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false; // Cesedin içinden geçilebilsin
+
+        // 2. Animasyon
         if (networkAnimator != null) networkAnimator.SetTrigger("Die");
         else if (animator != null) animator.SetTrigger("Die");
         
+        // 3. AI Temizliği
         StopAllCoroutines();
         CancelInvoke();
+        this.enabled = false; // Update döngüsünü durdur
+
+        // 4. Savaş Yönetiminden Sil
+        if (BattleManager.Instance != null && NetworkServer.active) 
+        {
+             BattleManager.Instance.UnregisterEnemy(this);
+        }
+
+        // 5. Ceset Yönetimi (Sınır: 30)
+        if (CorpseManager.Instance != null) 
+        {
+            CorpseManager.Instance.RegisterCorpse(gameObject);
+        }
+        else
+        {
+            // Fallback
+            if(NetworkServer.active) NetworkServer.Destroy(gameObject);
+            else Destroy(gameObject, 5f);
+        }
     }
 
     public override void OnStartServer()

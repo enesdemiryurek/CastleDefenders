@@ -12,7 +12,7 @@ public class Health : NetworkBehaviour, IDamageable
     public int CurrentHealth => currentHealth;
 
     [Header("Debug")]
-    public bool destroyOnDeath = true;
+    public bool destroyOnDeath = false; // User Request: CorpseManager yönetecek
     public float deathDelay = 20.0f; // Animasyon için zaman tanı (User Request: 20s)
 
     public event System.Action OnDeath;
@@ -22,6 +22,8 @@ public class Health : NetworkBehaviour, IDamageable
     public override void OnStartServer()
     {
         currentHealth = maxHealth;
+        // User Request: Cesetleri CorpseManager yönetsin, Health destroy etmesin
+        destroyOnDeath = false; 
     }
 
     [Header("Effects")]
@@ -44,7 +46,7 @@ public class Health : NetworkBehaviour, IDamageable
         int oldHealth = currentHealth;
         currentHealth -= amount;
         
-        Debug.Log($"{name} took {amount} damage. Current Health: {currentHealth}");
+        // Debug.Log($"{name} took {amount} damage. Current Health: {currentHealth}"); // Removed per user request
 
         // KAN EFEKTİ (Herkes görsün)
         RpcSpawnBlood(transform.position + Vector3.up * 1.5f);

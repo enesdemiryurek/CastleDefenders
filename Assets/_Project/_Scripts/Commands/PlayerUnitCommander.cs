@@ -432,7 +432,7 @@ public class PlayerUnitCommander : NetworkBehaviour
     [Command]
     private void CmdMoveUnits(int squadIndex, Vector3 targetPosition, Quaternion formationRotation, bool attackMove)
     {
-        Debug.Log($"[CmdMoveUnits] Called! Squad:{squadIndex}, Target:{targetPosition}, AttackMove:{attackMove}");
+        // Debug.Log($"[CmdMoveUnits] Called! Squad:{squadIndex}, Target:{targetPosition}, AttackMove:{attackMove}");
         
         // Bu grup için takip modunu kapat
         if (followingSquads.Contains(squadIndex))
@@ -443,17 +443,23 @@ public class PlayerUnitCommander : NetworkBehaviour
         myUnits.RemoveAll(u => u == null);
         
         var selectedUnits = myUnits.FindAll(u => u.SquadIndex == squadIndex);
-        Debug.Log($"[CmdMoveUnits] Found {selectedUnits.Count} units for squad {squadIndex}");
+        // Debug.Log($"[CmdMoveUnits] Found {selectedUnits.Count} units for squad {squadIndex}");
         
         if (selectedUnits.Count == 0) return;
 
         if (attackMove)
         {
-            // F1 CHARGE LOGIC: Hepsi aynı noktaya koşsun (Bodoslama)
-            Debug.Log($"[CmdMoveUnits] CHARGE MODE - Sending {selectedUnits.Count} units to {targetPosition}");
-            foreach (var unit in selectedUnits)
+            // F1 CHARGE LOGIC: Hepsi aynı noktaya koşsun (Bodoslama) -> DEĞİŞTİRİLDİ
+            // Artık Formasyon koruyarak "Süpürme Harekatı" yapıyorlar
+            // Bu sayede arkadakiler öndekilere takılıp "Ben geldim" sanıp durmuyor, kendi koltuğuna gitmeye çalışıyor
+            List<Vector3> points = CalculateFormationPoints(targetPosition, formationRotation, selectedUnits.Count, 1.3f); // Hafif geniş (1.3f)
+
+            for (int i = 0; i < selectedUnits.Count; i++)
             {
-                unit.MoveTo(targetPosition, formationRotation, false, true); // Formation yok, Attack Move aktif
+                if (i < points.Count)
+                {
+                    selectedUnits[i].MoveTo(points[i], formationRotation, false, true); // Wall=False, Attack=True
+                }
             }
         }
         else
@@ -509,31 +515,35 @@ public class PlayerUnitCommander : NetworkBehaviour
         myUnits.RemoveAll(u => u == null);
 
         Vector3 leaderPos = transform.position;
-        Quaternion leaderRot = transform.rotation;
-        
+        // Quaternion leaderRot = transform.rotation; // İPTAL: Oyuncu dönünce askerler savrulmasın (Zigzag Fix)
+        Quaternion leaderRot = Quaternion.identity; // DÜNYA EKSENİNE GÖRE SABİT
+
         // Sıkı düzen (Dipdibe)
         float spacing = 1.0f;
-        float squadGap = 2.0f; // Birlikler arası boşluk
-        float currentZOffset = 3.0f; // Oyuncunun ne kadar arkasından başlasın?
-
-        // Her takip eden grup (Squad) için ayrı blok oluştur
-        // followingSquads listesindeki sıraya göre dizelim (veya SquadIndex'e göre sort edebiliriz)
-        // Şimdilik 0, 1, 2... sırayla dizmek daha mantıklı.
+        float squadGap = 1.5f; 
         
+        // Oyuncunun biraz arkasından başlasınlar (ama Dünya eksenine göre "Güney" değil, sadece hizalama)
+        // Aslında direkt oyuncuyu merkez alırlarsa daha doğal olur.
+        // Ama oyuncunun üzerine çıkmasınlar diye arkadan takip mantığı (bodoslama)
+        // Kullanıcı "Sadece komutanlarına ilerlesinler" dedi. Yani peşinden gelsinler.
+        
+        // Dinamik Offset: Eğer oyuncu hareket ediyorsa, hareket yönünün tersine dizebiliriz?
+        // Ama en stabili: Sadece liderin pozisyonuna göre Grid oluşturmak.
+        
+        float currentZOffset = 2.0f; // Hafif arkadan
+
         List<int> sortedSquads = new List<int>(followingSquads);
-        // sortedSquads.Sort(); // İPTAL: Kullanıcının ekleme sırasına saygı duy (Archers -> Infantry ise öyle kalsın)
 
         foreach (int squadIndex in sortedSquads)
         {
             var unitsInSquad = myUnits.FindAll(u => u.SquadIndex == squadIndex);
             if (unitsInSquad.Count == 0) continue;
 
-            // 3 SIRA KURALI (Shield Wall: Genişlik artar, Derinlik sabit 3)
+            // 3 SIRA KURALI
             int rowCount = 3;
             int unitsPerRow = Mathf.CeilToInt(unitsInSquad.Count / (float)rowCount);
             if (unitsPerRow < 1) unitsPerRow = 1;
 
-            // Spacing (Sıkı: 0.8f)
             float localSpacing = 0.8f; 
             
             for (int i = 0; i < unitsInSquad.Count; i++)
@@ -544,10 +554,24 @@ public class PlayerUnitCommander : NetworkBehaviour
                 float xOffset = col * localSpacing - ((unitsPerRow * localSpacing) / 2f);
                 float rowDepth = row * localSpacing;
                 
-                // Oyuncunun arkasına doğru (Z ekseninde geriye)
-                float totalZ = currentZOffset + rowDepth;
-
-                Vector3 targetPos = leaderPos - (leaderRot * Vector3.forward * totalZ) + (leaderRot * Vector3.right * xOffset);
+                // Sabit Rotasyon ile hesapla
+                // leaderRot (Identity) olduğu için:
+                // Right -> World Right (X+)
+                // Forward -> World Forward (Z+)
+                // Oyuncunun dönüşü etkilemez!
+                
+                Vector3 offset = (Vector3.right * xOffset) - (Vector3.forward * (currentZOffset + rowDepth));
+                
+                // Eğer oyuncu hareket halindeyse bu offset "Dünya Koordinatlarında" hep aynı kalır.
+                // Oyuncu Kuzeye gidiyorsa askerler Güneyde kalır.
+                // Oyuncu Doğuya gidiyorsa askerler Batıda kalmaz, Güneybatıda kalır (xOffset'e göre).
+                // BU DA İSTENEN "SADECE İLERLESİNLER" DURUMUDUR.
+                
+                // İYİLEŞTİRME: Oyuncunun HIZ Vektörünü kullanalım mı?
+                // Hayır, "Zikzak yapınca şekilleniyor" dediği şey tam olarak hız vektörüne göre şekillenmeleri.
+                // O yüzden DÜNYA EKSENİ en iyisi.
+                
+                Vector3 targetPos = leaderPos + offset;
                 
                 unitsInSquad[i].MoveTo(targetPos);
             }

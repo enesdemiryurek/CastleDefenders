@@ -662,7 +662,7 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   maxHealth: 200
-  destroyOnDeath: 1
+  destroyOnDeath: 0
   deathDelay: 3
   bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!114 &-8562871257524031122
