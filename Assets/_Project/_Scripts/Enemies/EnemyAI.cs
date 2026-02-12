@@ -166,9 +166,21 @@ public class EnemyAI : NetworkBehaviour
         Collider col = GetComponent<Collider>();
         if (col != null) col.enabled = false; // Cesedin içinden geçilebilsin
 
-        // 2. Animasyon
-        if (networkAnimator != null) networkAnimator.SetTrigger("Die");
-        else if (animator != null) animator.SetTrigger("Die");
+        // 2. Animasyon (FORCE)
+        // Network Sync'i durdur (Yoksa Idle'a geri atıyor - Fix)
+        if (networkAnimator != null) networkAnimator.enabled = false;
+
+        if (animator != null) 
+        {
+            animator.CrossFadeInFixedTime("Die", 0.1f);
+        }
+        else if (networkAnimator != null && networkAnimator.animator != null) 
+        {
+            networkAnimator.animator.CrossFadeInFixedTime("Die", 0.1f);
+        }
+
+        // Yerle Hizala (Floating Fix)
+        SnapCorpseToGround();
         
         // 3. AI Temizliği
         StopAllCoroutines();
@@ -191,6 +203,15 @@ public class EnemyAI : NetworkBehaviour
             // Fallback
             if(NetworkServer.active) NetworkServer.Destroy(gameObject);
             else Destroy(gameObject, 5f);
+        }
+    }
+
+    private void SnapCorpseToGround()
+    {
+        // Cesedi yere yapıştır (Havada kalmasın)
+        if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit hit, 5f, groundLayer))
+        {
+            transform.position = hit.point;
         }
     }
 

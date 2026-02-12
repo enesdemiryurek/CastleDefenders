@@ -12,13 +12,14 @@ public class UnitAttack : NetworkBehaviour
     
     [Header("Ranged Settings")]
     [SerializeField] private bool isRanged = false;
-    [SerializeField] private float rangedAttackRange = 25.0f; // Okçular için uzun menzil
+    [SerializeField] private float rangedAttackRange = 50.0f; // Okçular için uzun menzil (User Request: 2 katına çıkarıldı)
     [SerializeField] private GameObject projectilePrefab;
     [SerializeField] private Transform projectileSpawnPoint;
 
     private float lastAttackTime;
     
     public float GetRange() => isRanged ? rangedAttackRange : attackRange;
+    public bool IsRanged => isRanged; // Public Accessor
     public void TryAttack(Transform target) => Attack(target.GetComponent<IDamageable>());
     
     // Logic Component Reference (The Brain)
@@ -35,11 +36,31 @@ public class UnitAttack : NetworkBehaviour
     }
 
     [Server]
+    public void FireVolley(Vector3 targetPoint)
+    {
+        if (!CanAttack()) return;
+        if (!isRanged) return; // Sadece okçular yağdırabilir
+
+        lastAttackTime = Time.time;
+
+        // 1. Dön
+        Vector3 lookPos = targetPoint;
+        lookPos.y = transform.position.y;
+        transform.LookAt(lookPos);
+
+        // 2. Animasyon
+        TriggerAttackAnimation();
+
+        // 3. Ateş (Alan Hedefli)
+        StartCoroutine(SpawnVolleyProjectileDelayed(targetPoint, 0.4f));
+    }
+
+    [Server]
     public void Attack(IDamageable target)
     {
         if (!CanAttack()) return;
         lastAttackTime = Time.time;
-
+        // ... (rest of Attack method)
         // 1. Durdur & Dön (Hareket varsa)
         if (target is MonoBehaviour targetMono)
         {
@@ -50,8 +71,6 @@ public class UnitAttack : NetworkBehaviour
         }
 
         // 2. Event Tetikle (Animasyon başlasın)
-        // UnitMovement üzerinden senkronize etmek daha doğrudur ama 
-        // burası sadece execution olduğu için NetworkAnimator kullanabiliriz.
         TriggerAttackAnimation();
 
         // 3. Hasar veya Mermi (Gecikmeli)
@@ -112,6 +131,7 @@ public class UnitAttack : NetworkBehaviour
         {
             if (target is MonoBehaviour targetMono && targetMono != null)
             {
+                // ... (Instantiate & Launch logic)
                 GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
                 NetworkServer.Spawn(proj);
 
@@ -124,9 +144,35 @@ public class UnitAttack : NetworkBehaviour
                 BallisticProjectile bp = proj.GetComponent<BallisticProjectile>();
                 if (bp != null)
                 {
-                    bp.SetShooter(gameObject); // Vuran biziz
-                    bp.Launch(targetPos);
+                    bp.SetShooter(gameObject); 
+                    bp.Launch(targetPos, 2.0f); // Normal atış (Düşük kavis)
                 }
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator SpawnVolleyProjectileDelayed(Vector3 targetPos, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (projectilePrefab != null && projectileSpawnPoint != null)
+        {
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, projectileSpawnPoint.rotation);
+            NetworkServer.Spawn(proj);
+
+            // Volley Spread (Daha geniş dağılım - Yağmur etkisi)
+            // User Request: "Alanı büyült"
+            float spreadRadius = 6.0f; 
+            Vector3 spread = Random.insideUnitSphere * spreadRadius;
+            spread.y = 0; 
+            Vector3 finalPos = targetPos + spread;
+
+            BallisticProjectile bp = proj.GetComponent<BallisticProjectile>();
+            if (bp != null)
+            {
+                bp.SetShooter(gameObject); 
+                // User Request: "Daha bombeli atsınlar" -> 8m yükseklik
+                bp.Launch(finalPos, 8.0f);
             }
         }
     }

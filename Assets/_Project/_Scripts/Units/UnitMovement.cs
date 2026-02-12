@@ -8,7 +8,7 @@ using UnityEngine.AI;
 [RequireComponent(typeof(UnitAttack))] // "Kas" sistemi zorunlu
 public class UnitMovement : NetworkBehaviour
 {
-    public enum UnitState { Idle, Guarding, Chasing, Charging, Moving }
+    public enum UnitState { Idle, Guarding, Chasing, Charging, Moving, Volley }
 
     [Header("State Info")]
     [SyncVar] public UnitState currentState = UnitState.Idle;
@@ -92,6 +92,8 @@ public class UnitMovement : NetworkBehaviour
     private Transform currentTarget;
     private Vector3? guardPosition = null;
     private Quaternion? guardRotation = null;
+    private Vector3 volleyTarget;
+    private Coroutine commandDelayRoutine; // Yeni: Komut gecikmesi için (Charge Animasyonu)
 
     private Coroutine chargeRoutine;
     private bool isCharging;
@@ -169,14 +171,51 @@ public class UnitMovement : NetworkBehaviour
     [Server]
     public void MoveTo(Vector3 position, Quaternion? lookRotation = null, bool shieldWall = false, bool attackMove = false)
     {
-        // Debug.Log($"[Unit {netId}] MoveTo called! Pos:{position}, AttackMove:{attackMove}, CurrentState:{currentState}");
-        currentState = UnitState.Moving; 
-        guardPosition = position;
-        guardRotation = lookRotation; // Rotasyonu kaydet
-        currentTarget = null; 
-        isAttackMoving = attackMove; // Attack Move durumunu kaydet
+        // Eski rutinleri temizle
+        if (commandDelayRoutine != null) StopCoroutine(commandDelayRoutine);
         
-        TrySetDestination(position);
+        if (attackMove)
+        {
+            // Saldırı emri ise önce Charge animasyonu yap
+            commandDelayRoutine = StartCoroutine(ChargeToMoveRoutine(position, lookRotation, shieldWall, attackMove));
+        }
+        else
+        {
+            // Normal hareket ise direkt git
+            ExecuteMoveTo(position, lookRotation, shieldWall, attackMove);
+        }
+    }
+
+    private IEnumerator ChargeToMoveRoutine(Vector3 pos, Quaternion? rot, bool isWall, bool attackMove)
+    {
+        // 1. Dur ve Bağır
+        StopMovement();
+
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger(chargeTriggerName);
+
+        yield return new WaitForSeconds(1.0f);
+
+        // 2. Harekete Geç
+        ExecuteMoveTo(pos, rot, isWall, attackMove);
+    }
+
+    private void ExecuteMoveTo(Vector3 pos, Quaternion? rot, bool isWall, bool attackMove)
+    {
+        currentState = UnitState.Moving;
+        guardPosition = pos;
+        guardRotation = rot;
+        isAttackMoving = attackMove;
+        
+        // ... (Kalan logic aynı)
+        // Duvar modu iptal edildiyse, NavMeshLink kullanmasın
+        if(agent.isOnNavMesh) agent.autoTraverseOffMeshLink = !isWall;
+        
+        TrySetDestination(pos);
+
+        // Eğer hedef varsa unut (yeni emir geldi)
+        currentTarget = null;
+        UnregisterEngagement(currentTarget);
     }
 
     [Server]
@@ -365,6 +404,10 @@ public class UnitMovement : NetworkBehaviour
             case UnitState.Moving:
                 HandleMoving();
                 break;
+
+            case UnitState.Volley:
+                HandleVolley();
+                break;
         }
     }
 
@@ -481,6 +524,78 @@ public class UnitMovement : NetworkBehaviour
         if(!agent.isOnNavMesh && Time.frameCount % 60 == 0) Debug.LogWarning($"[Unit {netId}] NavMesh üzerinde değil!");
     }
 
+    private void HandleVolley()
+    {
+        // Hız kontrolü (Charge'dan kalma hızlanmayı sıfırla)
+        if(agent.isOnNavMesh) agent.speed = moveSpeed;
+
+        // Hedefe (Alana) olan mesafe
+        float dist = Vector3.Distance(transform.position, volleyTarget);
+        float range = attacker.GetRange(); // Okçu menzili (50m)
+
+        if (dist <= range)
+        {
+            // Menzildeyiz: Dur ve Ateş Et
+            if(agent.isOnNavMesh) 
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
+            }
+
+            // Atış Yap (Cooldown kontrolü UnitAttack içinde)
+            if(attacker.CanAttack())
+            {
+                attacker.FireVolley(volleyTarget);
+            }
+        }
+        else
+        {
+            // Menzilde Değiliz: Yürü
+            if(agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
+                agent.SetDestination(volleyTarget);
+                // Not: TrySetDestination kullanmıyoruz çünkü direkt hedefe gitmeye çalışıyoruz, 
+                // ama menzile girince duracağız.
+            }
+        }
+    }
+
+    [Server]
+    public void OrderVolley(Vector3 targetPoint)
+    {
+        // Varsa eski rutini durdur
+        if (commandDelayRoutine != null) StopCoroutine(commandDelayRoutine);
+
+        // Yeni rutini başlat (Animasyon -> Hareket)
+        commandDelayRoutine = StartCoroutine(ChargeToVolleyRoutine(targetPoint));
+    }
+
+    private IEnumerator ChargeToVolleyRoutine(Vector3 targetPoint)
+    {
+        // 1. Dur ve Bağır
+        StopMovement(); // Hareketi kes
+        
+        // Animasyon (Charge)
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null) netAnim.SetTrigger(chargeTriggerName);
+        
+        // 1 Saniye Bekle (User Request)
+        yield return new WaitForSeconds(1.0f);
+
+        // 2. Aksiyonu Başlat
+        currentState = UnitState.Volley;
+        volleyTarget = targetPoint;
+        currentTarget = null;
+        isAttackMoving = false;
+        
+        if(agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.SetDestination(targetPoint);
+        }
+    }
+
     // --- SWARMING LOGIC ---
     private static Dictionary<Transform, int> activeEngagements = new Dictionary<Transform, int>();
 
@@ -517,9 +632,9 @@ public class UnitMovement : NetworkBehaviour
             // HIZLANDIR (Charge Effect - 1.2x)
             if(agent.isOnNavMesh) agent.speed = moveSpeed * 1.2f; 
 
-            // Filtereli Arama: Üzerinde 3 kişiden az olan EN YAKIN düşmanı bul (10m Menzil)
+            // Filtereli Arama: Üzerinde 3 kişiden az olan EN YAKIN düşmanı bul (5m Menzil - User Request: Sadece yakındakine dal)
             // Eğer hepsi doluysa null döner -> Koşmaya devam ederiz.
-            Transform found = AcquireTarget(10f, t => !IsTargetOverwhelmed(t)); 
+            Transform found = AcquireTarget(5f, t => !IsTargetOverwhelmed(t)); 
 
             if (found != null)
             {
@@ -672,13 +787,16 @@ public class UnitMovement : NetworkBehaviour
             // Yaklaş
             // STAND YOUR GROUND: Normal Guarding modunda hareket etme!
             // AMA ATTACK MOVE ise (isAttackMoving) saldır, kovala!
-            if (currentState != UnitState.Guarding || isAttackMoving)
+            // VEYA: Menzil içindeyse (Guard Zone) saldır (User Request: Vardıklarında saldırıya gitsinler)
+            if (currentState != UnitState.Guarding || isAttackMoving || dist <= guardRange)
             {
                 if (isAttackMoving && agent.isOnNavMesh) 
                 {
                     currentState = UnitState.Chasing; // Aktif takip moduna geç
                 }
-                MoveToTarget(target);
+                // Menzilli birimler için güvenli mesafede dur (Range * 0.8)
+                float stopDist = Mathf.Max(1.0f, attackRange * 0.8f);
+                MoveToTarget(target, stopDist);
             }
             else
             {
@@ -704,46 +822,60 @@ public class UnitMovement : NetworkBehaviour
     {
         UnregisterEngagement(currentTarget);
 
-        // Death Animation
+        // Death Animation (FORCE)
         Animator anim = GetComponentInChildren<Animator>();
+        NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+        
+        // Network Sync'i durdur (Yoksa Idle'a geri atıyor)
+        if (netAnim != null) netAnim.enabled = false;
+
         if(anim != null) 
         {
-            anim.enabled = true; // Animasyon oynasın
-            anim.SetTrigger("Death");
-            // Diğer trigger'ları temizle ki çakışmasın
-            anim.ResetTrigger("Attack");
-            anim.ResetTrigger("Charge");
+            anim.enabled = true; 
+            // Trigger yerine CrossFade kullan (Anında geçiş yap, başka animasyon bitmesini bekleme)
+            anim.CrossFadeInFixedTime("Death", 0.1f); 
         }
         
         if(agent != null) agent.enabled = false;
         
         Collider col = GetComponent<Collider>();
-        if(col != null) col.enabled = false; // Cesedin içinden geçilebilsin
+        if(col != null) col.enabled = false; 
 
         // Rigidbody EKLEME! (Animasyon ile yere düşecek)
-        // Eğer Rigidbody eklersek collider kapalı olduğu için mapten aşağı düşer.
 
-        // AI Kapat (Artık düşünmesin)
+        // Yerle hizala (Floating Fix)
+        SnapCorpseToGround();
+
+        // AI Kapat
         enabled = false;
         currentState = UnitState.Idle; 
 
-        // Ceset Yönetimi (Sınır: 30)
+        // Ceset Yönetimi
         if (CorpseManager.Instance != null) 
         {
             CorpseManager.Instance.RegisterCorpse(gameObject);
         }
         else
         {
-            // Manager yoksa fallback
             Destroy(gameObject, 30f);
         }
         
-        Debug.Log($"[Unit {netId}] Unit Died. Playing Death Animation.");
-        
-        Debug.Log($"[Unit {netId}] Unit Died. AI Disabled.");
+        // Debug.Log($"[Unit {netId}] Unit Died.");
     }
 
-    private void MoveToTarget(Transform target)
+    private void SnapCorpseToGround()
+    {
+        // Cesedi yere yapıştır (Havada kalmasın)
+        if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit hit, 5f, groundLayer))
+        {
+            transform.position = hit.point;
+            // Eğim varsa eğime göre de yatırılabilir ama şimdilik pozisyon yeterli
+        }
+    }
+        
+
+
+    private void MoveToTarget(Transform target, float stopDist = 1.0f)
     {
         // Eğer yeni bir hedefe hareket ediyorsak, mevcut hedefi bırak
         if (currentTarget != null && currentTarget != target)
@@ -751,7 +883,7 @@ public class UnitMovement : NetworkBehaviour
             UnregisterEngagement(currentTarget);
         }
         currentTarget = target; // MoveToTarget genellikle bir hedefi takip etmek için kullanılır
-        TrySetDestination(target.position);
+        TrySetDestination(target.position, stopDist);
     }
 
     private void StopMovement()
@@ -788,7 +920,8 @@ public class UnitMovement : NetworkBehaviour
     }
 
     // NavMesh hedefi güvenli şekilde ayarla
-    private void TrySetDestination(Vector3 targetPos)
+    // NavMesh hedefi güvenli şekilde ayarla
+    private void TrySetDestination(Vector3 targetPos, float stopDist = 1.0f)
     {
         if (agent == null || !agent.enabled) return;
 
@@ -810,6 +943,7 @@ public class UnitMovement : NetworkBehaviour
 
         if (agent.isOnNavMesh)
         {
+            agent.stoppingDistance = stopDist; 
             agent.isStopped = false;
             agent.SetDestination(finalPos);
         }

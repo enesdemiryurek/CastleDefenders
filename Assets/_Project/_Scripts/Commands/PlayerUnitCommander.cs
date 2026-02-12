@@ -98,7 +98,16 @@ public class PlayerUnitCommander : NetworkBehaviour
             // Sol Tık -> ONAYLA ve GÖNDER
             if (Mouse.current.leftButton.wasPressedThisFrame)
             {
-                CmdMoveUnits(selectedSquadIndex, commandCursorPos, commandRotation, isAttackCommand);
+                if (isAttackCommand && IsSelectedSquadRanged())
+                {
+                    // OKÇU YAĞMURU (Volley)
+                    CmdVolley(selectedSquadIndex, commandCursorPos);
+                }
+                else
+                {
+                    // NORMAL HAREKET / SALDIRI
+                    CmdMoveUnits(selectedSquadIndex, commandCursorPos, commandRotation, isAttackCommand);
+                }
                 ToggleCommandMode(false); // Moddan çık
             }
 
@@ -201,7 +210,16 @@ public class PlayerUnitCommander : NetworkBehaviour
         // 2. Görselleştirme (Preview)
         if (isAttackCommand)
         {
-            UpdateChargePathVisuals();
+            // Okçuysa Sadece Çember (Volley), Kılıçlıysa Yol (Charge)
+            if (IsSelectedSquadRanged())
+            {
+                if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
+                UpdatePreviewVisuals(); // Çemberi Çiz
+            }
+            else
+            {
+                UpdateChargePathVisuals(); // Kırmızı Yolu Çiz
+            }
         }
         else
         {
@@ -273,6 +291,34 @@ public class PlayerUnitCommander : NetworkBehaviour
         chargePathIndicator.transform.localScale = new Vector3(squadWidth, 0.1f, distance);
     }
 
+    // ... (Existing code) ...
+
+    private bool IsSelectedSquadRanged()
+    {
+        foreach(var u in myUnits)
+        {
+            if (u != null && u.SquadIndex == selectedSquadIndex && u.GetComponent<UnitAttack>().IsRanged)
+                return true;
+        }
+        return false;
+    }
+
+    [Command]
+    private void CmdVolley(int squadIndex, Vector3 targetPos)
+    {
+        foreach (var unit in myUnits)
+        {
+            if (unit != null && unit.SquadIndex == squadIndex)
+            {
+                unit.OrderVolley(targetPos);
+            }
+        }
+    }
+
+
+    
+    // ... (Other Commands) ...
+
     private void UpdatePreviewVisuals()
     {
         // 1. Seçili Asker Sayısı
@@ -284,13 +330,35 @@ public class PlayerUnitCommander : NetworkBehaviour
 
         if (count == 0) return;
 
-        // 2. Noktaları Hesapla (Artık commandCursorPos kullanıyoruz)
-        List<Vector3> points = CalculateFormationPoints(commandCursorPos, commandRotation, count, 1.0f);
+        bool isVolleyMode = isAttackCommand && IsSelectedSquadRanged();
+
+        List<Vector3> points;
+        
+        if (isVolleyMode)
+        {
+            // VOLLEY PREVIEW: ÇEMBER (User Request: "Yuvarlak alan belirsin")
+            points = new List<Vector3>();
+            float radius = 6.0f; // User Request: "Alanı biraz büyült" (3m -> 6m)
+            int segments = Mathf.Max(8, count); // En az 8 nokta olsun
+            
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / segments;
+                Vector3 offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
+                points.Add(commandCursorPos + offset);
+            }
+        }
+        else
+        {
+            // NORMAL PREVIEW
+            points = CalculateFormationPoints(commandCursorPos, commandRotation, count, 1.0f);
+        }
 
         // 3. Markerları Yerleştir
         EnsureMarkerPool(points.Count);
 
-        Color previewColor = isAttackCommand ? Color.red : Color.green; // Kırmızı = Saldırı, Yeşil = Hareket
+        Color previewColor = isAttackCommand ? (isVolleyMode ? Color.yellow : Color.red) : Color.green; 
+        // Volley = Sarı, Attack = Kırmızı, Move = Yeşil
 
         for (int i = 0; i < previewMarkers.Count; i++)
         {

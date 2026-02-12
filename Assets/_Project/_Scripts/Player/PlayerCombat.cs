@@ -38,6 +38,11 @@ public class PlayerCombat : NetworkBehaviour
         }
     }
 
+    public override void OnStartLocalPlayer()
+    {
+        // Crosshair KALDIRILDI (User Request)
+    }
+
     private void Update()
     {
         if (!isLocalPlayer) return;
@@ -52,8 +57,7 @@ public class PlayerCombat : NetworkBehaviour
         {
             if (Time.time - lastAttackTime >= attackCooldown && !isBlocking)
             {
-                // Client hemen animasyonu görsün diye lokalde de tetikleyebiliriz ama 
-                // NetworkAnimator zaten sync ediyor. Sadece komutu göndermemiz yeterli.
+                // Alan Hasarı (Eski sistem)
                 CmdAttack();
             }
         }
@@ -72,14 +76,14 @@ public class PlayerCombat : NetworkBehaviour
     [Command]
     private void CmdAttack()
     {
-        // Server side cooldown check (Hile koruması)
+        // Server side cooldown check
         if (Time.time - lastAttackTime < attackCooldown) return;
         lastAttackTime = Time.time;
 
-        // 1. Animasyonu Oynat (Herkese gider)
+        // 1. Animasyonu Oynat
         networkAnimator.SetTrigger(ATTACK_TRIGGER);
 
-        // 2. Hasar ver (Gecikmeli)
+        // 2. Hasar ver (Gecikmeli & Alan)
         StartCoroutine(DealDamageRoutine());
     }
 
@@ -88,22 +92,44 @@ public class PlayerCombat : NetworkBehaviour
     {
         yield return new WaitForSeconds(impactDelay);
 
-        // Alan Hasarı (Kılıcı savurunca önündeki herkese vurur)
+        // 1. Adayları Bul (AttackPoint etrafında)
         Collider[] hitEnemies = Physics.OverlapSphere(attackPoint.position, attackRange, enemyLayer);
+        
+        Collider bestTarget = null;
+        float minDistance = float.MaxValue;
+        float maxAngle = 60f; // 120 Derecelik görüş açısı (Önündekiler)
 
         foreach (var enemy in hitEnemies)
         {
-            // Kendine vurmasın (LayerMask zaten engeller ama yine de check)
             if (enemy.transform == transform) continue;
+            
+            // 2. Açı Kontrolü (Profesyonel Dokunuş: Sadece baktığın yöndekiler)
+            Vector3 dirToEnemy = (enemy.transform.position - transform.position).normalized;
+            float angle = Vector3.Angle(transform.forward, dirToEnemy);
 
-            IDamageable damageable = enemy.GetComponent<IDamageable>();
+            if (angle <= maxAngle)
+            {
+                // 3. En Yakın Olanı Seç
+                float dist = Vector3.Distance(transform.position, enemy.transform.position);
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    bestTarget = enemy;
+                }
+            }
+        }
+
+        // Sadece en uygun hedefe vur
+        if(bestTarget != null)
+        {
+            IDamageable damageable = bestTarget.GetComponent<IDamageable>();
             if (damageable != null)
             {
                 damageable.TakeDamage(damage, transform.position);
-                Debug.Log($"Hit enemy: {enemy.name}");
             }
         }
     }
+
 
     [Command]
     private void CmdSetBlocking(bool state)

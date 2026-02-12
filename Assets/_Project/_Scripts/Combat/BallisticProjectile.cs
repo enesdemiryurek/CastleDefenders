@@ -27,6 +27,7 @@ public class BallisticProjectile : NetworkBehaviour
     private GameObject shooter;
     
     [SyncVar] private Vector3 targetPosition;
+    [SyncVar] private float syncedArcHeight = 2f; // Yükseklik parametresi
     [SyncVar(hook = nameof(OnLaunchStateChanged))] private bool isLaunched;
 
     [Server]
@@ -37,12 +38,13 @@ public class BallisticProjectile : NetworkBehaviour
 
     // Server sadece başlatır
     [Server]
-    public void Launch(Vector3 targetPos)
+    public void Launch(Vector3 targetPos, float arcHeight = 2.0f)
     {
         // Network üzerinden pozisyonu senkronize et (SyncVar ile garanti altına al)
         if (hasLaunched) return;
         
         targetPosition = targetPos;
+        syncedArcHeight = arcHeight;
         isLaunched = true;
         
         // Host için manuel tetikle (Hook bazen Host'ta çalışmaz)
@@ -79,7 +81,7 @@ public class BallisticProjectile : NetworkBehaviour
         lastPosition = transform.position;
 
         // DOTween ile Zıplama (Parabol) Hareketi
-        transform.DOJump(targetPos, 2f, 1, duration)
+        transform.DOJump(targetPos, syncedArcHeight, 1, duration)
             .SetEase(Ease.Linear)
             .SetLink(gameObject) // GameObject yok olunca Tween'i de öldür (SAFE MODE Hatalarını Çözer)
             .OnUpdate(() => {
