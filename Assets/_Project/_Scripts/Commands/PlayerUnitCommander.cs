@@ -92,6 +92,24 @@ public class PlayerUnitCommander : NetworkBehaviour
             ToggleCommandMode(!isCommandMode, true);
         }
 
+        // 'V' -> CHARGE! (En yakın düşmana koş) - Her zaman çalışır
+        if (Keyboard.current.vKey.wasPressedThisFrame)
+        {
+            // Command mode açıksa kapat
+            if (isCommandMode) ToggleCommandMode(false, false);
+            
+            CmdChargeNearestEnemy(selectedSquadIndex);
+        }
+
+        // 'C' -> Beni takip et - Her zaman çalışır
+        if (Keyboard.current.cKey.wasPressedThisFrame)
+        {
+            // Command mode açıksa kapat
+            if (isCommandMode) ToggleCommandMode(false, false);
+            
+            CmdStartFollowing(selectedSquadIndex);
+        }
+
         // Eğer Command Mode açıksa, diğer komutları (Attack/Follow) engelle veya modu kapat
         if (isCommandMode)
         {
@@ -115,20 +133,6 @@ public class PlayerUnitCommander : NetworkBehaviour
             if (Mouse.current.rightButton.wasPressedThisFrame)
             {
                 ToggleCommandMode(false);
-            }
-        }
-        else
-        {
-            // 'C' -> Beni takip et
-            if (Keyboard.current.cKey.wasPressedThisFrame)
-            {
-                CmdStartFollowing(selectedSquadIndex);
-            }
-
-            // 'V' -> Serbest Saldırı
-            if (Keyboard.current.vKey.wasPressedThisFrame)
-            {
-                CmdAttackOrder(selectedSquadIndex);
             }
         }
     }
@@ -543,6 +547,24 @@ public class PlayerUnitCommander : NetworkBehaviour
                 }
             }
         }
+    }
+
+    [Command]
+    private void CmdChargeNearestEnemy(int squadIndex)
+    {
+        myUnits.RemoveAll(u => u == null);
+        
+        var selectedUnits = myUnits.FindAll(u => u.SquadIndex == squadIndex);
+        
+        if (selectedUnits.Count == 0) return;
+
+        // Tüm ünitelere charge emri ver
+        foreach (var unit in selectedUnits)
+        {
+            unit.ChargeNearestEnemy();
+        }
+        
+        Debug.Log($"[PlayerUnitCommander] V KEY CHARGE! {selectedUnits.Count} units charging!");
     }
 
     [Server]

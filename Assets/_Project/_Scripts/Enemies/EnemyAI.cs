@@ -183,9 +183,8 @@ public class EnemyAI : NetworkBehaviour
         SnapCorpseToGround();
         
         // 3. AI Temizliği
-        StopAllCoroutines();
         CancelInvoke();
-        this.enabled = false; // Update döngüsünü durdur
+        // NOT: this.enabled'ı coroutine içinde kapatacağız (yoksa coroutine durur)
 
         // 4. Savaş Yönetiminden Sil
         if (BattleManager.Instance != null && NetworkServer.active) 
@@ -193,7 +192,10 @@ public class EnemyAI : NetworkBehaviour
              BattleManager.Instance.UnregisterEnemy(this);
         }
 
-        // 5. Ceset Yönetimi (Sınır: 30)
+        // 5. Animasyon bitince Animator'ı kapat
+        StartCoroutine(DisableAnimatorAfterDeath());
+
+        // 6. Ceset Yönetimi (Sınır: 30)
         if (CorpseManager.Instance != null) 
         {
             CorpseManager.Instance.RegisterCorpse(gameObject);
@@ -204,6 +206,22 @@ public class EnemyAI : NetworkBehaviour
             if(NetworkServer.active) NetworkServer.Destroy(gameObject);
             else Destroy(gameObject, 5f);
         }
+    }
+
+    private System.Collections.IEnumerator DisableAnimatorAfterDeath()
+    {
+        // Ölüm animasyonunun süresini bekle (genelde 2-3 saniye)
+        yield return new WaitForSeconds(2.5f);
+        
+        // Animator'ı tamamen kapat
+        if (animator != null) animator.enabled = false;
+        if (networkAnimator != null && networkAnimator.animator != null) 
+        {
+            networkAnimator.animator.enabled = false;
+        }
+
+        // Şimdi AI'ı kapat (animasyon bitti)
+        this.enabled = false;
     }
 
     private void SnapCorpseToGround()

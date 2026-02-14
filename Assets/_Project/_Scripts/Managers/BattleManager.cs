@@ -28,6 +28,10 @@ public class BattleManager : MonoBehaviour
     public List<EnemyAI> enemyUnits = new List<EnemyAI>();
     public List<Transform> playerHeroes = new List<Transform>();
 
+    // Target Dağılımı: Her düşmana kaç kişi saldırıyor?
+    private Dictionary<Transform, int> enemyEngagementCount = new Dictionary<Transform, int>();
+    [SerializeField] private int maxEngagementsPerEnemy = 5; // Max 5 kişi/düşman
+
     private void Awake()
     {
         if (_instance == null) _instance = this;
@@ -35,6 +39,39 @@ public class BattleManager : MonoBehaviour
         
         // AUTO-SCAN: Sahnedeki her şeyi bul (Eğer önceden doğmuşlarsa)
         ScanBattlefield();
+    }
+
+    // Target Engagement Sistemi
+    public bool CanEngageEnemy(Transform enemy)
+    {
+        if (enemy == null) return false;
+        
+        if (!enemyEngagementCount.ContainsKey(enemy))
+            enemyEngagementCount[enemy] = 0;
+        
+        return enemyEngagementCount[enemy] < maxEngagementsPerEnemy;
+    }
+
+    public void RegisterEnemyEngagement(Transform enemy)
+    {
+        if (enemy == null) return;
+        
+        if (!enemyEngagementCount.ContainsKey(enemy))
+            enemyEngagementCount[enemy] = 0;
+        
+        enemyEngagementCount[enemy]++;
+    }
+
+    public void UnregisterEnemyEngagement(Transform enemy)
+    {
+        if (enemy == null) return;
+        
+        if (enemyEngagementCount.ContainsKey(enemy))
+        {
+            enemyEngagementCount[enemy]--;
+            if (enemyEngagementCount[enemy] <= 0)
+                enemyEngagementCount.Remove(enemy);
+        }
     }
 
     private void ScanBattlefield()

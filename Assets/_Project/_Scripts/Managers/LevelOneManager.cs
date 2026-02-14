@@ -22,6 +22,7 @@ public class LevelOneManager : NetworkBehaviour
     [SerializeField] private List<EnemySpawner> villageGuardSpawners;
     [SerializeField] private List<EnemySpawner> villageWaveSpawners;
     [SerializeField] private GameObject villageBarrier; // Dağa giden yol
+    [SerializeField] private GameObject villageCinematicCamera; // Sinematik kamera
 
     [Header("Phase 3: Mountain (Trap)")]
     [SerializeField] private GameObject rockTrapObject; // Düşecek kaya
@@ -36,6 +37,15 @@ public class LevelOneManager : NetworkBehaviour
     private void Awake()
     {
         Instance = this;
+    }
+
+    private void Start()
+    {
+        // Sinematik kamerayı baştan kapat (Timeline açacak)
+        if (villageCinematicCamera != null)
+        {
+            villageCinematicCamera.SetActive(false);
+        }
     }
 
     [Server]
@@ -122,9 +132,16 @@ public class LevelOneManager : NetworkBehaviour
     [ClientRpc]
     private void RpcPlayVillageCinematic()
     {
+        Debug.Log("[LevelOneManager] RpcPlayVillageCinematic called!");
+        
         if (villageIntroTimeline != null)
         {
+            Debug.Log("[LevelOneManager] Playing village cinematic!");
             villageIntroTimeline.Play();
+        }
+        else
+        {
+            Debug.LogError("[LevelOneManager] villageIntroTimeline is NULL! Assign VillageCutscene object in Inspector!");
         }
     }
 
