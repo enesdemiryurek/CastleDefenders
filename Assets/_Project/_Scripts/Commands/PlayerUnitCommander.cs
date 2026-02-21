@@ -31,6 +31,7 @@ public class PlayerUnitCommander : NetworkBehaviour
     // --- FORMATION PREVIEW VARIABLES ---
     [Header("Formation Preview")]
     [SerializeField] private GameObject formationMarkerPrefab; 
+    [SerializeField] private GameObject chargePathPrefab; // F1 hücum alanı zemin görseli
     private List<GameObject> previewMarkers = new List<GameObject>();
     private bool isCommandMode = false;
     private bool isAttackCommand = false; // F1: Saldırarak Git
@@ -146,6 +147,13 @@ public class PlayerUnitCommander : NetworkBehaviour
         PlayerController pc = GetComponent<PlayerController>();
         if (pc != null) pc.InputEnabled = !state;
 
+        // KAMERA ZOOM (F1'de uzaklaş, kapanınca normale dön)
+        if (PlayerCamera.Instance != null)
+        {
+            PlayerCamera.Instance.SetCommandZoom(state);
+            // Kamera dönüşü AÇIK kalsın - cursor kameranın forward'ına göre hesaplanıyor
+        }
+
         if (isCommandMode)
         {
             // Mod açılınca cursor'ı oyuncunun önüne koy
@@ -158,7 +166,7 @@ public class PlayerUnitCommander : NetworkBehaviour
                  commandCursorPos = hit.point;
              }
              
-             commandRotation = transform.rotation; // Oyuncunun baktığı yöne bak
+             commandRotation = transform.rotation;
         }
         else
         {
@@ -263,36 +271,76 @@ public class PlayerUnitCommander : NetworkBehaviour
         // 2. Indicator Oluştur (Yoksa)
         if (chargePathIndicator == null)
         {
-            chargePathIndicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(chargePathIndicator.GetComponent<Collider>());
-            chargePathIndicator.GetComponent<Renderer>().material.color = new Color(1f, 0f, 0f, 0.3f); // Yarı saydam kırmızı
+            if (chargePathPrefab != null)
+            {
+                // Kullanıcının Quad prefab'ını kullan
+                chargePathIndicator = Instantiate(chargePathPrefab);
+                Collider col = chargePathIndicator.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+            }
+            else
+            {
+                // Fallback: Eski küp
+                chargePathIndicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(chargePathIndicator.GetComponent<Collider>());
+                chargePathIndicator.GetComponent<Renderer>().material.color = new Color(1f, 0f, 0f, 0.3f);
+            }
         }
 
         chargePathIndicator.SetActive(true);
 
         // 3. Pozisyon ve Ölçek Ayarla
-        // Başlangıç: squadCenter
-        // Bitiş: commandCursorPos
-        
         Vector3 direction = commandCursorPos - squadCenter;
-        direction.y = 0; // Yere paralel
+        direction.y = 0;
         float distance = direction.magnitude;
         
         if (distance < 0.1f) distance = 0.1f;
 
-        // Position: Orta Nokta
-        chargePathIndicator.transform.position = squadCenter + (direction.normalized * (distance / 2f)) + Vector3.up * 0.1f;
+        // Position: Orta Nokta - Zemine yapıştır
+        Vector3 midPoint = squadCenter + (direction.normalized * (distance / 2f));
+        if (Physics.Raycast(midPoint + Vector3.up * 50f, Vector3.down, out RaycastHit pathHit, 100f, groundLayer))
+        {
+            midPoint.y = pathHit.point.y + 0.08f;
+        }
+        else
+        {
+            midPoint.y += 0.08f;
+        }
+        chargePathIndicator.transform.position = midPoint;
         
-        // Rotation: Hedefe dön
+        // Rotation: Yere yatır + hedefe baktır
         if (direction != Vector3.zero)
         {
-            chargePathIndicator.transform.rotation = Quaternion.LookRotation(direction);
+            if (chargePathPrefab != null)
+            {
+                // LookRotation(up, direction) → Z=yukarı(yüz yukarı), Y=hedef yönü
+                chargePathIndicator.transform.rotation = Quaternion.LookRotation(Vector3.up, direction.normalized);
+            }
+            else
+            {
+                chargePathIndicator.transform.rotation = Quaternion.LookRotation(direction);
+            }
         }
 
-        // Scale: Boyuna uza, Enine sabit (squadWidth kadar)
-        // Kullanıcı isteği: "Boyuna büyüyecek enine değil"
-        // Enine sabit (squadWidth), Boyuna (distance)
-        chargePathIndicator.transform.localScale = new Vector3(squadWidth, 0.1f, distance);
+        // Scale: Boyuna uza, Enine sabit
+        if (chargePathPrefab != null)
+        {
+            // Quad: X=genişlik, Y=uzunluk (yere yatık)
+            chargePathIndicator.transform.localScale = new Vector3(squadWidth, distance, 1f);
+            
+            // TEXTURE TILING: Uzadıkça tekrarla (uzamasın!)
+            Renderer rend = chargePathIndicator.GetComponent<Renderer>();
+            if (rend != null && rend.material != null)
+            {
+                // Her 3 birimde 1 kere tekrarla (oklar orantılı kalır)
+                float tileCount = distance / 3f;
+                rend.material.mainTextureScale = new Vector2(1f, tileCount);
+            }
+        }
+        else
+        {
+            chargePathIndicator.transform.localScale = new Vector3(squadWidth, 0.1f, distance);
+        }
     }
 
     // ... (Existing code) ...
@@ -372,13 +420,13 @@ public class PlayerUnitCommander : NetworkBehaviour
                 
                 // Zemin Yüksekliği (Hafif Raycast)
                 Vector3 p = points[i];
-                if (Physics.Raycast(p + Vector3.up * 5f, Vector3.down, out RaycastHit gh, 10f, groundLayer))
+                if (Physics.Raycast(p + Vector3.up * 50f, Vector3.down, out RaycastHit gh, 100f, groundLayer))
                 {
                     p.y = gh.point.y + 0.1f;
                 }
                 
                 previewMarkers[i].transform.position = p;
-                previewMarkers[i].transform.rotation = commandRotation;
+                previewMarkers[i].transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Yere yapıştır
 
                 // Rengi Güncelle
                 Renderer r = previewMarkers[i].GetComponent<Renderer>();
@@ -400,14 +448,18 @@ public class PlayerUnitCommander : NetworkBehaviour
             if (formationMarkerPrefab != null)
             {
                 marker = Instantiate(formationMarkerPrefab);
+                // Collider'ları sil (oyuncuyu itmesin!)
+                foreach (var col in marker.GetComponentsInChildren<Collider>())
+                {
+                    Destroy(col);
+                }
             }
             else
             {
                 // Prefab yoksa ilkel (Primitive) oluştur (Fallback)
                 marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                marker.transform.rotation = Quaternion.Euler(90, 0, 0); // Yere yatır
+                marker.transform.rotation = Quaternion.Euler(90, 0, 0);
                 marker.transform.localScale = Vector3.one * 0.5f;
-                // Collider'ı sil ki Raycast'i engellemesin
                 Destroy(marker.GetComponent<Collider>());
             }
             previewMarkers.Add(marker);
@@ -431,9 +483,11 @@ public class PlayerUnitCommander : NetworkBehaviour
     }
     
     // --- SELECTION VISUALS (Quick Outline) ---
+    private Dictionary<UnitMovement, Coroutine> outlineTimers = new Dictionary<UnitMovement, Coroutine>();
+
     private void UpdateVisualSelection()
     {
-        // 1. Tüm Unitleri Bul (Client tarafında) - İleride optimize edilebilir
+        // 1. Tüm Unitleri Bul (Client tarafında)
         UnitMovement[] allUnits = FindObjectsByType<UnitMovement>(FindObjectsSortMode.None);
 
         foreach (var unit in allUnits)
@@ -441,35 +495,73 @@ public class PlayerUnitCommander : NetworkBehaviour
             // Sadece benim askerlerim
             if (!unit.isOwned) continue;
 
-            // Modelin üzerindeki Renderer'ı bul (veya Outline scriptini)
-            Outline outline = unit.GetComponentInChildren<Outline>();
-            
-            // Eğer Outline yoksa ekle (Otomatik Setup)
-            if (outline == null)
+            // ÖLÜ KONTROL: Ölü askerlere outline verme!
+            Health unitHealth = unit.GetComponent<Health>();
+            if (unitHealth != null && !unitHealth.IsAlive) continue;
+
+            bool isSelected = (unit.SquadIndex == selectedSquadIndex);
+
+            // PERFORMANS: Sadece ANA renderer'a Outline ekle (her child'a değil!)
+            // SkinnedMeshRenderer varsa onu kullan (karakter modeli)
+            Renderer mainRenderer = unit.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (mainRenderer == null) mainRenderer = unit.GetComponentInChildren<MeshRenderer>();
+            if (mainRenderer == null) continue;
+
+            Outline outline = mainRenderer.GetComponent<Outline>();
+
+            if (isSelected)
             {
-                // Unitte "Model" veya "Mesh" adında bir child yoksa direkt kendine ekleriz
-                // Ama genelde Animator'ın olduğu yerdedir.
-                Renderer rend = unit.GetComponentInChildren<Renderer>();
-                if (rend != null)
+                // Seçili - Outline lazım
+                if (outline == null)
                 {
-                    outline = rend.gameObject.AddComponent<Outline>();
+                    outline = mainRenderer.gameObject.AddComponent<Outline>();
                     outline.OutlineMode = Outline.Mode.OutlineAll;
-                    outline.OutlineColor = Color.green; // Seçili Rengi
+                    outline.OutlineColor = Color.green;
                     outline.OutlineWidth = 5f;
                 }
+                outline.enabled = true;
+            }
+            else
+            {
+                // Seçili değil - varsa kapat
+                if (outline != null) outline.enabled = false;
             }
 
-            if (outline != null)
+            // 3 SANİYE SONRA KAPAT (Sadece seçili olanlar için)
+            if (isSelected)
             {
-                if (unit.SquadIndex == selectedSquadIndex)
+                // Eski timer varsa iptal et
+                if (outlineTimers.ContainsKey(unit))
                 {
-                    outline.enabled = true; // Seçili
+                    if (outlineTimers[unit] != null)
+                        StopCoroutine(outlineTimers[unit]);
                 }
-                else
-                {
-                    outline.enabled = false; // Seçili Değil
-                }
+
+                // Yeni timer başlat
+                outlineTimers[unit] = StartCoroutine(DisableOutlineAfterDelay(unit, 3f));
             }
+        }
+    }
+
+    private System.Collections.IEnumerator DisableOutlineAfterDelay(UnitMovement unit, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (unit == null) yield break;
+
+        // PERFORMANS: Sadece ana renderer Outline kapat
+        Renderer mainRend = unit.GetComponentInChildren<SkinnedMeshRenderer>();
+        if (mainRend == null) mainRend = unit.GetComponentInChildren<MeshRenderer>();
+        if (mainRend != null)
+        {
+            Outline ol = mainRend.GetComponent<Outline>();
+            if (ol != null) ol.enabled = false;
+        }
+
+        // Timer'ı temizle
+        if (outlineTimers.ContainsKey(unit))
+        {
+            outlineTimers.Remove(unit);
         }
     }
 
@@ -663,7 +755,7 @@ public class PlayerUnitCommander : NetworkBehaviour
                 
                 Vector3 targetPos = leaderPos + offset;
                 
-                unitsInSquad[i].MoveTo(targetPos);
+                unitsInSquad[i].MoveTo(targetPos, isFollowMove: true);
             }
 
             // Bir sonraki birlik için offset güncelle

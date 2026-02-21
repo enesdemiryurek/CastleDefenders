@@ -6,14 +6,20 @@ using UnityEngine.AI;
 public class EnemyAI : NetworkBehaviour
 {
     [Header("AI Settings")]
-    [SerializeField] private float aggroRange = 50000f; // Bannerlord Style: GERÇEKTEN tüm harita (30x arttırıldı)
+    [SerializeField] private float aggroRange = 300f; // Düşmanı algılama mesafesi (metre)
     [SerializeField] private float attackRange = 2f;
+    [SerializeField] private float moveSpeed = 3.5f; // Koşma hızı (Inspector'dan ayarlanır)
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 1.5f;
     [SerializeField] private float updateInterval = 0.5f; // Saniyede 2 kere karar ver (performans için)
 
     [Header("Targets")]
     [SerializeField] private LayerMask targetLayers; // Player ve Unit layer'ları
+
+    [Header("Zone Restriction")]
+    [SerializeField] private bool useZoneRestriction = true; // Bölge sınırlaması aktif mi?
+    [SerializeField] private float maxDistanceFromSpawn = 50f; // Spawn noktasından max uzaklık
+    private Vector3 spawnPosition; // Doğduğu yer
 
     [Header("Ranged Settings")]
     [SerializeField] private bool isRanged = false;
@@ -151,58 +157,62 @@ public class EnemyAI : NetworkBehaviour
         }
     }
 
+
     private void OnDeathHandler()
     {
         if (isDead) return;
         isDead = true;
         
-        // 1. Hareket ve Fizik İptal
+        // 1. Hareket İptal
         if (agent != null)
         {
             agent.isStopped = true;
-            agent.enabled = false; 
+            agent.velocity = Vector3.zero;
+            agent.enabled = false;
         }
 
-        Collider col = GetComponent<Collider>();
-        if (col != null) col.enabled = false; // Cesedin içinden geçilebilsin
-
-        // 2. Animasyon (FORCE)
-        // Network Sync'i durdur (Yoksa Idle'a geri atıyor - Fix)
+        // 2. Animasyon (FORCE) - Die TRIGGER kullan!
         if (networkAnimator != null) networkAnimator.enabled = false;
 
         if (animator != null) 
         {
-            animator.CrossFadeInFixedTime("Die", 0.1f);
+            // Tüm parametreleri sıfırla (koşma animasyonu dursun)
+            animator.SetFloat("Speed", 0f);
+            animator.SetBool("IsMoving", false);
+            animator.SetTrigger("Die"); // TRIGGER kullan!
         }
         else if (networkAnimator != null && networkAnimator.animator != null) 
         {
-            networkAnimator.animator.CrossFadeInFixedTime("Die", 0.1f);
+            networkAnimator.animator.SetFloat("Speed", 0f);
+            networkAnimator.animator.SetBool("IsMoving", false);
+            networkAnimator.animator.SetTrigger("Die"); // TRIGGER kullan!
         }
 
-        // Yerle Hizala (Floating Fix)
+        // Tüm clientlarda da ölüm animasyonu tetikle
+        RpcPlayDeathAnimation();
+
+        // 3. Yere Düşür (Havada kalmasın!)
         SnapCorpseToGround();
         
-        // 3. AI Temizliği
+        // 4. AI Temizliği
         CancelInvoke();
-        // NOT: this.enabled'ı coroutine içinde kapatacağız (yoksa coroutine durur)
 
-        // 4. Savaş Yönetiminden Sil
+        // 5. Savaş Yönetiminden Sil
         if (BattleManager.Instance != null && NetworkServer.active) 
         {
              BattleManager.Instance.UnregisterEnemy(this);
         }
 
-        // 5. Animasyon bitince Animator'ı kapat
+        // 6. Animasyon bitince Animator'ı kapat + Collider'ları kapat
         StartCoroutine(DisableAnimatorAfterDeath());
 
-        // 6. Ceset Yönetimi (Sınır: 30)
+        // 7. Ceset Yönetimi (Sınır: 30)
         if (CorpseManager.Instance != null) 
         {
             CorpseManager.Instance.RegisterCorpse(gameObject);
         }
         else
         {
-            // Fallback
             if(NetworkServer.active) NetworkServer.Destroy(gameObject);
             else Destroy(gameObject, 5f);
         }
@@ -210,32 +220,64 @@ public class EnemyAI : NetworkBehaviour
 
     private System.Collections.IEnumerator DisableAnimatorAfterDeath()
     {
-        // Ölüm animasyonunun süresini bekle (genelde 2-3 saniye)
-        yield return new WaitForSeconds(2.5f);
+        // Kısa bir süre bekle, sonra collider'ları kapat
+        yield return new WaitForSeconds(0.5f);
         
-        // Animator'ı tamamen kapat
+        // Collider'ları kapat (cesedin içinden geçilebilsin)
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+        // Ölüm animasyonu bittikten sonra Animator'ı kapat
+        yield return new WaitForSeconds(2.0f);
+        
         if (animator != null) animator.enabled = false;
         if (networkAnimator != null && networkAnimator.animator != null) 
         {
             networkAnimator.animator.enabled = false;
         }
 
-        // Şimdi AI'ı kapat (animasyon bitti)
         this.enabled = false;
+    }
+
+    [ClientRpc]
+    private void RpcPlayDeathAnimation()
+    {
+        // Tüm clientlarda ölüm animasyonu tetikle
+        Animator anim = animator != null ? animator : GetComponentInChildren<Animator>();
+        if (anim != null)
+        {
+            anim.SetFloat("Speed", 0f);
+            anim.SetBool("IsMoving", false);
+            anim.SetTrigger("Die");
+        }
     }
 
     private void SnapCorpseToGround()
     {
-        // Cesedi yere yapıştır (Havada kalmasın)
-        if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit hit, 5f, groundLayer))
+        // Cesedi yere yapıştır (Havada kalmasın!)
+        // Yukarıdan 10m ray at - geniş arama
+        if (Physics.Raycast(transform.position + Vector3.up * 5f, Vector3.down, out RaycastHit hit, 20f, groundLayer))
         {
             transform.position = hit.point;
+        }
+        else
+        {
+            // Fallback: Rigidbody ekle, yerçekimiyle düşsün
+            Rigidbody rb = gameObject.AddComponent<Rigidbody>();
+            rb.mass = 50f;
+            rb.linearDamping = 2f;
+            rb.freezeRotation = true;
+            // 3 saniye sonra Rigidbody'yi kaldır (yere düştükten sonra)
+            Destroy(rb, 3f);
         }
     }
 
     public override void OnStartServer()
     {
         base.OnStartServer();
+        
+        // Spawn pozisyonunu kaydet (zone restriction için)
+        spawnPosition = transform.position;
         
         // NAVMESH FIX v2: Daha agresif zemin arama
         if (agent != null)
@@ -264,6 +306,14 @@ public class EnemyAI : NetworkBehaviour
 
         if(agent != null) 
         {
+             // AggroRange güvenlik kontrolü
+             if (aggroRange > 500f)
+             {
+                 Debug.LogWarning($"[{name}] AggroRange {aggroRange} çok yüksek! 300'e düşürülüyor.");
+                 aggroRange = 300f;
+             }
+             
+             agent.speed = moveSpeed; // Koşma hızını ayarla
              agent.stoppingDistance = Mathf.Max(0.5f, attackRange - 0.5f);
              agent.autoTraverseOffMeshLink = false; // MERDİVEN İÇİN: Otomatik geçişi kapat
         }
@@ -294,7 +344,8 @@ public class EnemyAI : NetworkBehaviour
 
     private void OnValidate()
     {
-        if (aggroRange < 50000f) aggroRange = 50000f;
+        // AggroRange minimum 10, maksimum 500
+        aggroRange = Mathf.Clamp(aggroRange, 10f, 500f);
     }
 
     private void OnDestroy()
@@ -309,6 +360,14 @@ public class EnemyAI : NetworkBehaviour
     {
         if (isDead) return;
         
+        // KNOCKDOWN: Yerdeyken hiçbir şey yapma!
+        Health myHealth = GetComponent<Health>();
+        if (myHealth != null && myHealth.isKnockedDown)
+        {
+            if (agent.isOnNavMesh) agent.isStopped = true;
+            return;
+        }
+        
         // Animasyon Hızı (Basit)
         if (animator != null && agent.enabled) animator.SetFloat("Speed", agent.velocity.magnitude);
 
@@ -320,6 +379,22 @@ public class EnemyAI : NetworkBehaviour
         {
             if (!isClimbing) StartCoroutine(TraverseLadder());
             return;
+        }
+
+        // ZONE RESTRICTION: Spawn noktasından çok uzaklaştıysak geri dön
+        if (useZoneRestriction && NetworkServer.active)
+        {
+            float distFromSpawn = Vector3.Distance(transform.position, spawnPosition);
+            if (distFromSpawn > maxDistanceFromSpawn)
+            {
+                // Çok uzaklaştık! Geri dön
+                currentTarget = null; // Hedefi bırak
+                if (agent != null && agent.isOnNavMesh)
+                {
+                    agent.SetDestination(spawnPosition);
+                }
+                return; // Hedef arama yapma
+            }
         }
 
         // Hedef Arama (1 saniyede bir - Yeterli)
@@ -340,45 +415,43 @@ public class EnemyAI : NetworkBehaviour
 
     private void FindBestTarget()
     {
-        // TARGETING (Simple + Distributed)
+        // MEVCUT HEDEFİ KONTROL ET: Hedef varsa ve canlıysa değiştirme!
+        if (currentTarget != null)
+        {
+            Health existingHealth = currentTarget.GetComponent<Health>();
+            if (existingHealth != null && existingHealth.IsAlive)
+            {
+                return; // Hedef hala canlı, değiştirme → zikzak yapma!
+            }
+        }
+
+        // Hedef yok veya öldü → yeni hedef ara
         Collider[] hits = Physics.OverlapSphere(transform.position, aggroRange, targetLayers);
         
         Transform bestTarget = null;
-        float bestScore = float.MaxValue; 
+        float bestDist = float.MaxValue; 
 
         foreach (var hit in hits)
         {
             if (hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
 
             var damageable = hit.GetComponentInParent<IDamageable>();
-            if (damageable != null)
+            if (damageable == null) continue;
+
+            // ÖLÜ KONTROLÜ
+            Health targetHealth = hit.GetComponentInParent<Health>();
+            if (targetHealth != null && !targetHealth.IsAlive) continue;
+
+            Transform candidate = hit.transform;
+            if (hit.GetComponentInParent<NetworkBehaviour>() != null)
+                candidate = hit.GetComponentInParent<NetworkBehaviour>().transform;
+
+            float dist = Vector3.Distance(transform.position, candidate.position);
+
+            if (dist < bestDist)
             {
-                Transform candidate = hit.transform;
-                if (hit.GetComponentInParent<NetworkBehaviour>() != null)
-                    candidate = hit.GetComponentInParent<NetworkBehaviour>().transform;
-
-                float dist = Vector3.Distance(transform.position, candidate.position);
-                
-                // --- DAĞINIK SALDIRI MANTIĞI ---
-                // Sadece en yakınına gitmesinler, biraz rastgele dağılsınlar.
-                // Okçular (Ranged) çok daha rastgele hedefler seçsin (arka safları vursun).
-                // Yakıncılar (Melee) biraz daha toplu kalsın ama yine de yığılmasın.
-                
-                float noiseRange = isRanged ? 20.0f : 5.0f; 
-                float randomBias = Random.Range(0f, noiseRange); // Pozitif sayı ekliyoruz ki uzaktaki "daha uzak" görünsün DEĞİL.
-                // Mantık: Score = Distance + Noise. 
-                // Eğer gürültü negatif olursa uzaktaki yakına gelebilir. Biz 'distribution' istiyoruz.
-                // Doğrusu: Random.Range(-noise, noise).
-                
-                float noise = Random.Range(-noiseRange, noiseRange);
-                float score = dist + noise; 
-
-                // Skor ne kadar düşükse o kadar "yakın" hissedilir.
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestTarget = candidate;
-                }
+                bestDist = dist;
+                bestTarget = candidate;
             }
         }
 
@@ -422,32 +495,30 @@ public class EnemyAI : NetworkBehaviour
                 agent.SetDestination(currentTarget.position);
             }
         }
-        // --- MELEE MANTIK (Klasik) ---
+        // --- MELEE MANTIK ---
         else
         {
-            // Yaklaşma mantığı (NavMeshStopping Distance ayarı ile uyumlu olmalı)
-            agent.SetDestination(currentTarget.position);
-
             if (dist <= attackRange)
             {
-                name = $"Enemy_MeleeAttack_>{currentTarget.name}";
-                // Menzildeyiz: Dur, Dön ve Saldır
+                // Menzildeyiz: DUR ve SALDIRI
                 agent.isStopped = true;
-                agent.updateRotation = false; // NavMesh dönmesin, biz döndüreceğiz
+                agent.updateRotation = false;
+                agent.ResetPath(); // İçine girmeyi önle!
                 
                 // Hedefe Dön
                 Vector3 lookPos = currentTarget.position;
                 lookPos.y = transform.position.y;
-                transform.LookAt(lookPos); // veya Smooth Rotate
+                transform.LookAt(lookPos);
 
                 AttackTarget();
             }
             else
             {
-                name = $"Enemy_Chasing_>{currentTarget.name}";
-                // Menzil dışındayız: Koş
+                // Menzil dışındayız: Koş ama saldırı menzilinde dur
+                agent.stoppingDistance = attackRange - 0.3f;
                 agent.isStopped = false;
                 agent.updateRotation = true;
+                agent.SetDestination(currentTarget.position);
             }
         }
     }

@@ -20,6 +20,7 @@ public class UnitAttack : NetworkBehaviour
     
     public float GetRange() => isRanged ? rangedAttackRange : attackRange;
     public bool IsRanged => isRanged; // Public Accessor
+    public int GetDamage() => damage; // Charge Attack için hasar değeri
     public void TryAttack(Transform target) => Attack(target.GetComponent<IDamageable>());
     
     // Logic Component Reference (The Brain)
@@ -115,8 +116,9 @@ public class UnitAttack : NetworkBehaviour
         yield return new WaitForSeconds(delay);
         if (target != null && target is MonoBehaviour targetMono && targetMono != null) // Hala hayatta mı?
         {
-            // Mesafe kontrolü (Vururken kaçtı mı?)
-            if (Vector3.Distance(transform.position, targetMono.transform.position) <= 3.5f)
+            // Mesafe kontrolü (Vururken kaçtı mı?) - attackRange + 1m tolerans
+            float maxHitDist = (isRanged ? rangedAttackRange : attackRange) + 1f;
+            if (Vector3.Distance(transform.position, targetMono.transform.position) <= maxHitDist)
             {
                 target.TakeDamage(damage, transform.position);
             }

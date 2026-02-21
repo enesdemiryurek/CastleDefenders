@@ -1,5 +1,6 @@
 using Mirror;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class Health : NetworkBehaviour, IDamageable
 {
@@ -10,6 +11,7 @@ public class Health : NetworkBehaviour, IDamageable
     private int currentHealth;
 
     public int CurrentHealth => currentHealth;
+    public bool IsAlive => currentHealth > 0;
 
     [Header("Debug")]
     public bool destroyOnDeath = false; // User Request: CorpseManager yönetecek
@@ -18,6 +20,7 @@ public class Health : NetworkBehaviour, IDamageable
     public event System.Action OnDeath;
     public event System.Action OnRevive; // İleride gerekebilir
     public event System.Action<int, int> EventHealthChanged; // Current, Max
+    public event System.Action<Transform> OnDamaged; // Hasar aldığında saldıranın Transform'u
 
     public override void OnStartServer()
     {
@@ -53,6 +56,21 @@ public class Health : NetworkBehaviour, IDamageable
 
         HandleHealthChanged(oldHealth, currentHealth);
 
+        // Saldıranı bildir (Reactive Defense için)
+        if (damageSource.HasValue)
+        {
+            // damageSource pozisyonundan saldıranı bul
+            Collider[] nearAttackers = Physics.OverlapSphere(damageSource.Value, 3f);
+            foreach (var col in nearAttackers)
+            {
+                if (col.transform != transform) // Kendimiz değil
+                {
+                    OnDamaged?.Invoke(col.transform);
+                    break; // İlk bulunan saldıran yeterli
+                }
+            }
+        }
+
         if (currentHealth <= 0)
         {
             Die();
@@ -62,33 +80,19 @@ public class Health : NetworkBehaviour, IDamageable
     [ClientRpc]
     private void RpcSpawnBlood(Vector3 position)
     {
-        if (bloodVfxPrefab != null)
+        try
         {
-            GameObject fx = Instantiate(bloodVfxPrefab, position, Quaternion.identity);
-            Destroy(fx, 2f);
+            if (bloodVfxPrefab != null)
+            {
+                GameObject fx = Instantiate(bloodVfxPrefab, position, Quaternion.identity);
+                Destroy(fx, 2f);
+            }
+            // bloodVfxPrefab yoksa hiçbir şey yapma (Shader.Find build'de crash yapar!)
         }
-        else
+        catch (System.Exception e)
         {
-            // FALLBACK: Eğer prefab atanmamışsa basit kırmızı efekt oluştur (Programmer Art)
-            CreateFallbackBlood(position);
+            Debug.LogWarning($"RpcSpawnBlood error (safe): {e.Message}");
         }
-    }
-
-    private void CreateFallbackBlood(Vector3 pos)
-    {
-        GameObject blood = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        blood.transform.position = pos;
-        blood.transform.localScale = Vector3.one * 0.3f;
-        
-        var rend = blood.GetComponent<Renderer>();
-        if (rend != null) 
-        {
-            rend.material = new Material(Shader.Find("Standard")); // Basit material
-            rend.material.color = Color.red;
-        }
-
-        Destroy(blood.GetComponent<Collider>()); // Fizik etkileşimi olmasın
-        Destroy(blood, 0.5f); // Yarım saniye sonra sil
     }
 
     private void HandleHealthChanged(int oldValue, int newValue)
@@ -127,6 +131,85 @@ public class Health : NetworkBehaviour, IDamageable
     private System.Collections.IEnumerator DestroyAfterDelay()
     {
         yield return new WaitForSeconds(deathDelay);
+        
+        // GÜVENLIK: Player objesini ASLA destroy etme!
+        if (GetComponent<PlayerController>() != null)
+        {
+            Debug.LogWarning($"[Health] Player destroy engellendi: {name}");
+            yield break;
+        }
+        
         NetworkServer.Destroy(gameObject);
+    }
+
+    // ==========================================
+    // KNOCKDOWN SİSTEMİ (F1 Charge Attack)
+    // ==========================================
+    
+    [SyncVar] public bool isKnockedDown = false;
+    private Coroutine knockdownRoutine;
+
+    [Server]
+    public void ApplyKnockdown(float groundDuration = 1f)
+    {
+        // Ölüyse veya zaten yerdeyse tekrar knockdown yapma
+        if (!IsAlive || isKnockedDown) return;
+        
+        if (knockdownRoutine != null) StopCoroutine(knockdownRoutine);
+        knockdownRoutine = StartCoroutine(KnockdownRoutine(groundDuration));
+    }
+
+    [Server]
+    private System.Collections.IEnumerator KnockdownRoutine(float groundDuration)
+    {
+        isKnockedDown = true;
+        
+        // NavMeshAgent durdur
+        NavMeshAgent agent = GetComponent<NavMeshAgent>();
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+        
+        // Düşme animasyonu tetikle
+        RpcTriggerKnockdown();
+        
+        // 1 saniye yerde kal
+        yield return new WaitForSeconds(groundDuration);
+        
+        // Kalkma animasyonu tetikle
+        RpcTriggerGetUp();
+        
+        // Kalkma animasyonu süresince bekle (1 saniye)
+        yield return new WaitForSeconds(1f);
+        
+        // Kalktı! Normal duruma dön
+        isKnockedDown = false;
+        
+        if (agent != null && agent.isOnNavMesh && IsAlive)
+        {
+            agent.isStopped = false;
+        }
+    }
+
+    [ClientRpc]
+    private void RpcTriggerKnockdown()
+    {
+        Animator anim = GetComponent<Animator>();
+        if (anim != null)
+        {
+            anim.SetTrigger("KnockedDown");
+        }
+    }
+
+    [ClientRpc]
+    private void RpcTriggerGetUp()
+    {
+        Animator anim = GetComponent<Animator>();
+        if (anim != null)
+        {
+            anim.SetTrigger("GetUp");
+        }
     }
 }

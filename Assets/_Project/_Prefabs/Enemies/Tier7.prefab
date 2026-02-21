@@ -220,6 +220,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Tier7
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: d1472db0572a8a841ae2d90b9f138baa, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 326b5a052d563ba4f895f7952fefddf0, type: 2}
     - target: {fileID: 8111781155169087978, guid: d1472db0572a8a841ae2d90b9f138baa, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
@@ -292,7 +296,7 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   clientAuthority: 0
-  animator: {fileID: 0}
+  animator: {fileID: 7464400124639933000}
 --- !u!114 &-4476277210111815286
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -385,6 +389,7 @@ MonoBehaviour:
   maxHealth: 100
   destroyOnDeath: 1
   deathDelay: 3
+  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
 --- !u!195 &-4189714500122654413
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -398,7 +403,7 @@ NavMeshAgent:
   m_Speed: 3.5
   m_Acceleration: 8
   avoidancePriority: 50
-  m_AngularSpeed: 120
+  m_AngularSpeed: 30
   m_StoppingDistance: 0
   m_AutoTraverseOffMeshLink: 1
   m_AutoBraking: 1
@@ -422,14 +427,17 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  aggroRange: 10
+  aggroRange: 500
   attackRange: 2
+  moveSpeed: 3.5
   damage: 10
   attackCooldown: 1.5
   updateInterval: 0.5
   targetLayers:
     serializedVersion: 2
     m_Bits: 1152
+  useZoneRestriction: 1
+  maxDistanceFromSpawn: 50
   isRanged: 0
   projectilePrefab: {fileID: 0}
   projectileSpawnPoint: {fileID: 0}

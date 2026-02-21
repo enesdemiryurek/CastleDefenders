@@ -13,8 +13,13 @@ public class PlayerCamera : MonoBehaviour
     [SerializeField] private float verticalClampMax = 60f;
 
     private Transform target;
-    private float pitch; // Vertical rotation (Look Up/Down)
-    private float yaw;   // Horizontal rotation (Look Left/Right)
+    private float pitch;
+    private float yaw;
+
+    private Vector3 defaultOffset;
+    private Vector3 currentOffset;
+    [SerializeField] private float commandZoomMultiplier = 1.5f; // F1'de ne kadar uzaklaşsın
+    [SerializeField] private float zoomSpeed = 5f;
 
     // Singleton-like access for Player to register itself
     public static PlayerCamera Instance;
@@ -22,6 +27,8 @@ public class PlayerCamera : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        defaultOffset = offset;
+        currentOffset = offset;
     }
 
     public void SetTarget(Transform newTarget)
@@ -49,35 +56,38 @@ public class PlayerCamera : MonoBehaviour
     private void HandleRotation()
     {
         if (Mouse.current == null) return;
+        if (rotationLocked) return; // Komut modunda kamerayı döndürme
 
-        // Read Mouse Delta
         Vector2 mouseDelta = Mouse.current.delta.ReadValue();
-        
-        // Yaw (Horizontal): Rotates the TARGET (Player) directly for TPS feel? 
-        // OR Rotates Camera around Target?
-        // STRATEGY: 
-        // - Camera rotates Yaw and Pitch. 
-        // - Player rotates to match Camera Yaw (usually handled in PlayerController for Network sync).
-        // Let's keep Camera independent first.
         
         yaw += mouseDelta.x * mouseSensitivity * 0.1f;
         pitch -= mouseDelta.y * mouseSensitivity * 0.1f;
         
-        // Clamp Vertical
         pitch = Mathf.Clamp(pitch, verticalClampMin, verticalClampMax);
 
-        // Apply Rotation
         transform.eulerAngles = new Vector3(pitch, yaw, 0f);
     }
 
     private void HandleFollow()
     {
-        // Calculate desired position based on rotation and offset
-        // Quaternion * Vector3 applies the rotation to the offset vector
-        Vector3 targetPosition = target.position + (transform.rotation * offset);
-        
-        // Smooth Follow
+        // Smooth zoom geçişi
+        currentOffset = Vector3.Lerp(currentOffset, offset, zoomSpeed * Time.deltaTime);
+
+        Vector3 targetPosition = target.position + (transform.rotation * currentOffset);
         transform.position = Vector3.Lerp(transform.position, targetPosition, smoothSpeed * Time.deltaTime);
+    }
+
+    // F1 komut modu zoom
+    public void SetCommandZoom(bool active)
+    {
+        offset = active ? defaultOffset * commandZoomMultiplier : defaultOffset;
+    }
+
+    // Komut modunda kamera dönmesin
+    private bool rotationLocked = false;
+    public void SetRotationLock(bool locked)
+    {
+        rotationLocked = locked;
     }
     
     // Helper to get logic forward (mostly for PlayerController movement direction)

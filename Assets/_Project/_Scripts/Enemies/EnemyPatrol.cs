@@ -10,8 +10,9 @@ public class EnemyPatrol : NetworkBehaviour
 {
     [Header("Patrol Settings")]
     [SerializeField] private Transform[] waypoints; // Devriye noktaları
-    [SerializeField] private float waypointReachDistance = 1f;
+    [SerializeField] private float waypointReachDistance = 1.5f; // Waypoint'e ulaşma mesafesi
     [SerializeField] private float waitTimeAtWaypoint = 2f;
+    [SerializeField] private float patrolSpeed = 1.5f; // Devriye yürüme hızı (koşma değil!)
     [SerializeField] private bool randomOrder = false;
     [SerializeField] private bool pingPongMode = true; // Geri dön (1→2→3→4→3→2→1)
 
@@ -114,9 +115,15 @@ public class EnemyPatrol : NetworkBehaviour
         }
     }
 
+    private float lastPatrolCheckTime;
+
     [Server]
     private void CheckPlayerInPatrolZone()
     {
+        // PERFORMANS: Her frame yerine 1 saniyede bir kontrol et
+        if (Time.time - lastPatrolCheckTime < 1.0f) return;
+        lastPatrolCheckTime = Time.time;
+
         // Oyuncuları bul
         PlayerController[] players = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
         
@@ -172,6 +179,8 @@ public class EnemyPatrol : NetworkBehaviour
             currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
         }
 
+        // Devriye hızını ayarla (yürüme, koşma değil!)
+        agent.speed = patrolSpeed;
         agent.SetDestination(waypoints[currentWaypointIndex].position);
     }
 
