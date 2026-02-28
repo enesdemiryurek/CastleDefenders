@@ -15,8 +15,8 @@ MonoBehaviour:
   waterGeomType: 0
   depthMapCullingMask:
     serializedVersion: 2
-    m_Bits: 65536
-  refType: 1
+    m_Bits: 65552
+  refType: 0
   planarSettings:
     m_ResolutionMultiplier: 2
     m_ClipPlaneOffset: 0

@@ -12,22 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b17284ebf5e80436eb6089f8c7459dab, type: 3}
   m_Name: WaterSurfaceData
   m_EditorClassIdentifier: 
-  _waterMaxVisibility: 30
+  _waterMaxVisibility: 162
   _absorptionRamp:
     serializedVersion: 2
-    key0: {r: 1, g: 1, b: 1, a: 1}
-    key1: {r: 0.8117647, g: 0.8807721, b: 1, a: 1}
-    key2: {r: 0.30779037, g: 0.586788, b: 0.7830189, a: 0}
-    key3: {r: 0.023529412, g: 0.50980395, b: 0.42628732, a: 0}
-    key4: {r: 0, g: 0.28270978, b: 0.4392157, a: 0}
-    key5: {r: 0, g: 0, b: 0, a: 0}
+    key0: {r: 0.8117647, g: 0.8807721, b: 1, a: 1}
+    key1: {r: 0.30779037, g: 0.586788, b: 0.7830189, a: 1}
+    key2: {r: 0.023529412, g: 0.50980395, b: 0.42628732, a: 0}
+    key3: {r: 0, g: 0.28270978, b: 0.4392157, a: 0}
+    key4: {r: 0.21404415, g: 0.4570382, b: 0.6981132, a: 0}
+    key5: {r: 0.21404415, g: 0.4570382, b: 0.6981132, a: 0}
     key6: {r: 0, g: 0, b: 0, a: 0}
     key7: {r: 0, g: 0, b: 0, a: 0}
     ctime0: 0
-    ctime1: 2506
-    ctime2: 5012
-    ctime3: 16925
-    ctime4: 34547
+    ctime1: 2313
+    ctime2: 16962
+    ctime3: 30262
+    ctime4: 65535
     ctime5: 65535
     ctime6: 0
     ctime7: 0
@@ -40,12 +40,12 @@ MonoBehaviour:
     atime6: 0
     atime7: 0
     m_Mode: 0
-    m_ColorSpace: -1
-    m_NumColorKeys: 6
+    m_ColorSpace: 0
+    m_NumColorKeys: 5
     m_NumAlphaKeys: 2
   _scatterRamp:
     serializedVersion: 2
-    key0: {r: 0, g: 0, b: 0, a: 1}
+    key0: {r: 0.16264686, g: 0.51222783, b: 0.8018868, a: 1}
     key1: {r: 0.2509804, g: 0.32941177, b: 0.31336328, a: 1}
     key2: {r: 0.21568628, g: 0.2943139, b: 0.32941177, a: 0}
     key3: {r: 0.11574403, g: 0.41769665, b: 0.4811321, a: 0}
@@ -53,8 +53,8 @@ MonoBehaviour:
     key5: {r: 0, g: 0, b: 0, a: 0}
     key6: {r: 0, g: 0, b: 0, a: 0}
     key7: {r: 0, g: 0, b: 0, a: 0}
-    ctime0: 386
-    ctime1: 2891
+    ctime0: 35273
+    ctime1: 65535
     ctime2: 65535
     ctime3: 65535
     ctime4: 65535
@@ -70,8 +70,8 @@ MonoBehaviour:
     atime6: 0
     atime7: 0
     m_Mode: 0
-    m_ColorSpace: -1
-    m_NumColorKeys: 3
+    m_ColorSpace: 0
+    m_NumColorKeys: 2
     m_NumAlphaKeys: 2
   _waves:
   - amplitude: 4.9
@@ -119,7 +119,7 @@ MonoBehaviour:
   _customWaves: 0
   randomSeed: 41580
   _basicWaveSettings:
-    numWaves: 9
+    numWaves: 8
     amplitude: 0.1
     direction: -177
     wavelength: 4
@@ -130,21 +130,21 @@ MonoBehaviour:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.23584332
-        inSlope: -0.17874658
-        outSlope: -0.17874658
-        tangentMode: 34
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
         weightedMode: 0
         inWeight: 0
-        outWeight: 0.33333334
+        outWeight: 0
       - serializedVersion: 3
-        time: 0.94998986
-        value: 0.06603588
-        inSlope: -0.17874658
-        outSlope: -0.17874658
-        tangentMode: 34
+        time: 1
+        value: 1
+        inSlope: 2
+        outSlope: 2
+        tangentMode: 0
         weightedMode: 0
-        inWeight: 0.33333334
+        inWeight: 0
         outWeight: 0
       m_PreInfinity: 2
       m_PostInfinity: 2

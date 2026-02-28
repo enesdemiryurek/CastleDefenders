@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5c8d65229ca37ba4ba061239060016ec
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 239445
+  packageName: HDRP Surfaces Starter Pack
+  packageVersion: 1.0
+  assetPath: Assets/HDRP Surfaces Starter Pack/Surfaces/Materials/Lit/Dirt.mat
+  uploadId: 707036
