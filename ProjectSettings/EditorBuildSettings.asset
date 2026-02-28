@@ -24,6 +24,9 @@ EditorBuildSettings:
     path: Assets/_Project/_Scenes/Lobby.unity
     guid: 1bb56ef2f70d56444bb51963b2a8bb09
   - enabled: 1
+    path: Assets/_Project/_Scenes/Mekanikleri Deniyoruz.unity
+    guid: 4a18948755f285a4095cca9f5b5b7fef
+  - enabled: 0
     path: "Assets/_Project/_Scenes/Level1PusuB\xF6l\xFCm1.unity"
     guid: b8f0afb76c4347d43b57ffabd3ff6f47
   - enabled: 0

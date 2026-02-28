@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#beta",
     "com.unity.2d.enhancers": "1.0.0",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.ai.assistant": "1.6.0-pre.2",
@@ -12,6 +13,7 @@
     "com.unity.inputsystem": "1.18.0",
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.nuget.newtonsoft-json": "3.2.2",
+    "com.unity.postprocessing": "3.5.1",
     "com.unity.render-pipelines.universal": "17.3.0",
     "com.unity.terrain-tools": "5.3.1",
     "com.unity.test-framework": "1.6.0",

@@ -106,8 +106,8 @@ QualitySettings:
     terrainQualityOverrides: 26
     terrainPixelError: 1
     terrainDetailDensityScale: 1
-    terrainBasemapDistance: 300
-    terrainDetailDistance: 50
+    terrainBasemapDistance: 804
+    terrainDetailDistance: 120
     terrainTreeDistance: 200
     terrainBillboardStart: 50
     terrainFadeLength: 5
