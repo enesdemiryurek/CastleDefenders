@@ -5,6 +5,7 @@ using UnityEngine.AI;
 public class UnitAttack : NetworkBehaviour
 {
     [Header("Combat Settings")]
+    [SerializeField] private string[] attackTriggers = { "Attack", "Attack1", "Attack2" }; // Birden fazla animasyon için
     [SerializeField] private int damage = 15;
     [Header("Settings")]
     [SerializeField] private float attackRange = 4.0f; // Menzil Artırıldı (Eski: 2.0f)
@@ -36,6 +37,12 @@ public class UnitAttack : NetworkBehaviour
         return Time.time - lastAttackTime >= attackCooldown;
     }
 
+    // Dışarıdan zorla cooldown başlatmak için (Örn: Charge Attack sonrası)
+    public void SetAttackCooldown()
+    {
+        lastAttackTime = Time.time;
+    }
+
     [Server]
     public void FireVolley(Vector3 targetPoint)
     {
@@ -44,13 +51,17 @@ public class UnitAttack : NetworkBehaviour
 
         lastAttackTime = Time.time;
 
-        // 1. Dön
+        // 1. Dön: Y Ekseni Kilitlemesi (Hedef havada olsa bile yukarı bakmasın/uçmasın)
         Vector3 lookPos = targetPoint;
         lookPos.y = transform.position.y;
-        transform.LookAt(lookPos);
+        
+        // Rotasyonu Quaterion ile pürüzsüz yap (Direkt LookAt motoru sarsıyor)
+        Vector3 dir = (lookPos - transform.position).normalized;
+        if (dir.sqrMagnitude > 0.01f)
+            transform.rotation = Quaternion.LookRotation(dir);
 
-        // 2. Animasyon
-        TriggerAttackAnimation();
+        // 2. Animasyon (Sadece Event'i tetikle, UnitAnimationController yakalayacak)
+        OnAttack?.Invoke();
 
         // 3. Ateş (Alan Hedefli)
         StartCoroutine(SpawnVolleyProjectileDelayed(targetPoint, 0.4f));
@@ -65,14 +76,17 @@ public class UnitAttack : NetworkBehaviour
         // 1. Durdur & Dön (Hareket varsa)
         if (target is MonoBehaviour targetMono)
         {
-            // Yüzünü hedefe dön
+            // Yüzünü hedefe dön ama Y eksenini KESİNLİKLE kilitle! (Hedef zıplıyorsa havaya kalkma)
             Vector3 lookPos = targetMono.transform.position;
             lookPos.y = transform.position.y;
-            transform.LookAt(lookPos);
+            
+            Vector3 dir = (lookPos - transform.position).normalized;
+            if (dir.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.LookRotation(dir);
         }
 
-        // 2. Event Tetikle (Animasyon başlasın)
-        TriggerAttackAnimation();
+        // 2. Event Tetikle (Sadece Event tetiklenmeli ki animasyon Controller'ından oynasın)
+        OnAttack?.Invoke();
 
         // 3. Hasar veya Mermi (Gecikmeli)
         if (isRanged)
@@ -84,14 +98,6 @@ public class UnitAttack : NetworkBehaviour
             // Melee: Direkt hasar ama animasyonun "Vurma" anına denk gelmeli (0.5s gibi)
             StartCoroutine(DealMeleeDamageDelayed(target, 0.5f));
         }
-    }
-
-    private void TriggerAttackAnimation()
-    {
-        TriggerAnimation("Attack");
-
-        // Event Tetikle (AnimationController için)
-        OnAttack?.Invoke();
     }
 
     // Genel amaçlı animasyon tetikleyicisi (NetworkAnimator varsa onu tercih eder)

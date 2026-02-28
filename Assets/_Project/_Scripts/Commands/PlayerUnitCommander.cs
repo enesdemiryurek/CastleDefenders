@@ -220,24 +220,8 @@ public class PlayerUnitCommander : NetworkBehaviour
         }
 
         // 2. Görselleştirme (Preview)
-        if (isAttackCommand)
-        {
-            // Okçuysa Sadece Çember (Volley), Kılıçlıysa Yol (Charge)
-            if (IsSelectedSquadRanged())
-            {
-                if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
-                UpdatePreviewVisuals(); // Çemberi Çiz
-            }
-            else
-            {
-                UpdateChargePathVisuals(); // Kırmızı Yolu Çiz
-            }
-        }
-        else
-        {
-            if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
-            UpdatePreviewVisuals();
-        }
+        if (chargePathIndicator != null) chargePathIndicator.SetActive(false);
+        UpdatePreviewVisuals();
     }
 
     private void UpdateChargePathVisuals()

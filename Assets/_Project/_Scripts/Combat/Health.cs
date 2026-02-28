@@ -37,7 +37,14 @@ public class Health : NetworkBehaviour, IDamageable
     {
         if (currentHealth <= 0) return;
 
-        // Kalkan Sistemi Kontrolü
+        // Player Kalkan Kontrolü (Tam absorb, HP bazlı)
+        PlayerShield playerShield = GetComponent<PlayerShield>();
+        if (playerShield != null && damageSource.HasValue)
+        {
+            amount = playerShield.TryBlock(amount, damageSource.Value);
+        }
+
+        // Ünite Kalkan Kontrolü (Şans bazlı, yüzde azaltma)
         ShieldSystem shield = GetComponent<ShieldSystem>();
         if (shield != null && damageSource.HasValue)
         {
@@ -49,10 +56,10 @@ public class Health : NetworkBehaviour, IDamageable
         int oldHealth = currentHealth;
         currentHealth -= amount;
         
-        // Debug.Log($"{name} took {amount} damage. Current Health: {currentHealth}"); // Removed per user request
+        bool isFatal = currentHealth <= 0;
 
         // KAN EFEKTİ (Herkes görsün)
-        RpcSpawnBlood(transform.position + Vector3.up * 1.5f);
+        RpcSpawnBlood(transform.position + Vector3.up * 1.5f, isFatal);
 
         HandleHealthChanged(oldHealth, currentHealth);
 
@@ -78,16 +85,25 @@ public class Health : NetworkBehaviour, IDamageable
     }
 
     [ClientRpc]
-    private void RpcSpawnBlood(Vector3 position)
+    private void RpcSpawnBlood(Vector3 position, bool isFatal)
     {
         try
         {
             if (bloodVfxPrefab != null)
             {
-                GameObject fx = Instantiate(bloodVfxPrefab, position, Quaternion.identity);
-                Destroy(fx, 2f);
+                // KAN EFEKTİ DÜZELTMESİ: (Kullanıcı İstekleri: Tek noktadan çıksın, kısa sürsün, havada asılı kalmasın)
+                // Yön hep rastgele (Y ekseninde)
+                Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+                
+                // Havada kalmasını önlemek için Parent'a bağlamıyoruz, zaten kısacık sürüp yok olacak.
+                // Hep hedefin göğüs/bel hizasında (Yerden 1 metre yukarıda) tek bir noktada spawnla.
+                Vector3 spawnPos = new Vector3(transform.position.x, transform.position.y + 1.0f, transform.position.z);
+
+                GameObject fx = Instantiate(bloodVfxPrefab, spawnPos, randomRotation);
+                
+                // Kan spreyinin havada asılı kalıp kötü görünmemesi için çok kısa sürede (0.5 saniye) sil!
+                Destroy(fx, 0.5f);
             }
-            // bloodVfxPrefab yoksa hiçbir şey yapma (Shader.Find build'de crash yapar!)
         }
         catch (System.Exception e)
         {
@@ -152,9 +168,23 @@ public class Health : NetworkBehaviour, IDamageable
     [Server]
     public void ApplyKnockdown(float groundDuration = 1f)
     {
+        Debug.Log($"[Health] {name} ★ ApplyKnockdown çağrıldı! IsAlive={IsAlive}, isKnockedDown={isKnockedDown}, EnemyAI={GetComponent<EnemyAI>() != null}");
+
         // Ölüyse veya zaten yerdeyse tekrar knockdown yapma
-        if (!IsAlive || isKnockedDown) return;
+        if (!IsAlive || isKnockedDown) 
+        {
+            Debug.Log($"[Health] {name} Knockdown İPTAL! IsAlive={IsAlive}, isKnockedDown={isKnockedDown}");
+            return;
+        }
         
+        // SADECE DÜŞMANLARI DÜŞÜR (Oyuncu veya dost askerler düşmez)
+        if (GetComponent<EnemyAI>() == null) 
+        {
+            Debug.Log($"[Health] {name} Knockdown İPTAL! EnemyAI bulunamadı (dost asker mi?)");
+            return;
+        }
+        
+        Debug.Log($"[Health] {name} ★★★ KNOCKDOWN BAŞLIYOR! Süre: {groundDuration}s");
         if (knockdownRoutine != null) StopCoroutine(knockdownRoutine);
         knockdownRoutine = StartCoroutine(KnockdownRoutine(groundDuration));
     }
@@ -172,17 +202,17 @@ public class Health : NetworkBehaviour, IDamageable
             agent.ResetPath();
         }
         
-        // Düşme animasyonu tetikle
+        // Düşme animasyonu tetikle (Tüm clientlarda)
         RpcTriggerKnockdown();
         
-        // 1 saniye yerde kal
+        // Belirtilen saniye kadar yerde kal
         yield return new WaitForSeconds(groundDuration);
         
         // Kalkma animasyonu tetikle
         RpcTriggerGetUp();
         
-        // Kalkma animasyonu süresince bekle (1 saniye)
-        yield return new WaitForSeconds(1f);
+        // Kalkma animasyonu süresince bekle (1.5 saniye)
+        yield return new WaitForSeconds(1.5f);
         
         // Kalktı! Normal duruma dön
         isKnockedDown = false;
@@ -193,23 +223,64 @@ public class Health : NetworkBehaviour, IDamageable
         }
     }
 
+    // ANIMATOR TRIGGER SORUNU ÇÖZÜMÜ: NetworkAnimator bazen özel düşman prefablarında sync sorunu yaratabiliyor.
+    // ClientRpc ile tüm istemcilere direkt "Animator" buldurup shotgunlama taktiğiyle her potansiyel trigger'ı vurduruyoruz.
     [ClientRpc]
     private void RpcTriggerKnockdown()
     {
-        Animator anim = GetComponent<Animator>();
+        Animator anim = GetComponentInChildren<Animator>();
+        Debug.Log($"[Health] {name} RpcTriggerKnockdown CLIENT'A ULAŞTI! Animator={anim != null}");
         if (anim != null)
         {
-            anim.SetTrigger("KnockedDown");
+            // Önce mevcut saldırı/vurulma animasyonlarını durdur
+            SafeResetTrigger(anim, "Hit");
+            SafeResetTrigger(anim, "Attack");
+            
+            // Bilinen tüm knockdown trigger varyasyonlarını dene
+            bool triggered = false;
+            triggered |= SafeSetTrigger(anim, "KnockedDown");
+            triggered |= SafeSetTrigger(anim, "Knockdown");
+            triggered |= SafeSetTrigger(anim, "KnockedD");
+            
+            Debug.Log($"[Health] {name} Knockdown trigger gönderildi: {triggered}");
         }
     }
 
     [ClientRpc]
     private void RpcTriggerGetUp()
     {
-        Animator anim = GetComponent<Animator>();
+        Animator anim = GetComponentInChildren<Animator>();
         if (anim != null)
         {
-            anim.SetTrigger("GetUp");
+            SafeSetTrigger(anim, "GetUp");
+        }
+    }
+
+    // Animator'da bu parametre var mı diye güvenli kontrol
+    private bool HasParameter(Animator anim, string paramName)
+    {
+        foreach (var param in anim.parameters)
+        {
+            if (param.name == paramName) return true;
+        }
+        return false;
+    }
+
+    private bool SafeSetTrigger(Animator anim, string triggerName)
+    {
+        if (HasParameter(anim, triggerName))
+        {
+            anim.SetTrigger(triggerName);
+            return true;
+        }
+        return false;
+    }
+
+    private void SafeResetTrigger(Animator anim, string triggerName)
+    {
+        if (HasParameter(anim, triggerName))
+        {
+            anim.ResetTrigger(triggerName);
         }
     }
 }

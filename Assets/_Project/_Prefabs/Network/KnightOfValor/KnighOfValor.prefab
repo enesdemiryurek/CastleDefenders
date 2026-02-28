@@ -44,6 +44,18 @@ PrefabInstance:
       value: 10
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
       objectReference: {fileID: 0}
@@ -241,6 +253,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7582547705460085058}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7502971443417455177}
   m_SourcePrefab: {fileID: 100100000, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}
 --- !u!4 &180830583180569019 stripped
 Transform:
@@ -414,6 +429,14 @@ MonoBehaviour:
   enemyLayer:
     serializedVersion: 2
     m_Bits: 8
+  kickDamage: 40
+  kickRange: 2.5
+  kickAngle: 90
+  kickCooldown: 10
+  kickImpactDelay: 0.3
+  kickKnockdownDuration: 0.5
+  dominoRadius: 1.5
+  maxDominoChain: 10
   attackPoint: {fileID: 4980858937406631384}
 --- !u!114 &-2848071329309779386
 MonoBehaviour:
@@ -456,7 +479,8 @@ MonoBehaviour:
   maxHealth: 500
   destroyOnDeath: 1
   deathDelay: 3
-  bloodVfxPrefab: {fileID: 2655679725876414924, guid: 47bd591215c3aa24482666646f97ad68, type: 3}
+  bloodVfxPrefab: {fileID: 2942878182056050032, guid: dc7f8e4b369cc4148b9a458ba0658469, type: 3}
+  isKnockedDown: 0
 --- !u!114 &8387371742786183936
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -473,12 +497,10 @@ MonoBehaviour:
   syncMode: 0
   syncInterval: 0
   unitPrefabs:
-  - {fileID: 4918208957073381471, guid: 4295544bff123264b9345dd4c94c4d8b, type: 3}
-  - {fileID: 779360704632571355, guid: 709e4e27d4b5ca14f96e31ba5faeb771, type: 3}
-  - {fileID: 5434830068951039485, guid: 1512f486a4e2e2c4c896f9c7a071ad42, type: 3}
-  unitCountPerSquad: 51
+  - {fileID: 1265527873354341447, guid: 89fcca1c05647624ebb7806432f9ba95, type: 3}
+  unitCountPerSquad: 10
   spacing: 0.8
-  unitsPerRow: 3
+  unitsPerRow: 2
   distanceBetweenSquads: 3
   maxNavMeshDistance: 5
 --- !u!136 &7582547705460085058
@@ -504,6 +526,26 @@ CapsuleCollider:
   m_Height: 1
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &7502971443417455177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2630439551736466981}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 005c8b9e617447c49b47276da8bcef84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerShield
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  maxShieldHP: 500
+  blockAngle: 120
+  shieldVisual: {fileID: 919132149155446097, guid: 53b36de6220dc074190a8abff36a15d1, type: 3}
+  blockSound: {fileID: 0}
+  shieldBreakSound: {fileID: 0}
 --- !u!4 &3443813876390663327 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 386fdb09cb8bc904f95ad930b6387a32, type: 3}

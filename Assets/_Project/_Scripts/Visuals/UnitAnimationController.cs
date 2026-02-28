@@ -33,9 +33,11 @@ public class UnitAnimationController : NetworkBehaviour
         if (enemyAI == null) enemyAI = GetComponent<EnemyAI>();
     }
 
-    public override void OnStartClient()
+    private void RegisterEvents()
     {
-        // Eventlere abone ol
+        if (eventsRegistered) return;
+        eventsRegistered = true;
+
         if (health != null)
         {
             health.OnDeath += HandleDeath;
@@ -45,9 +47,11 @@ public class UnitAnimationController : NetworkBehaviour
         if (enemyAI != null) enemyAI.OnAttack += HandleAttack;
     }
 
-    public override void OnStopClient()
+    private void UnregisterEvents()
     {
-        // Abonelikleri temizle
+        if (!eventsRegistered) return;
+        eventsRegistered = false;
+
         if (health != null)
         {
              health.OnDeath -= HandleDeath;
@@ -57,12 +61,21 @@ public class UnitAnimationController : NetworkBehaviour
         if (enemyAI != null) enemyAI.OnAttack -= HandleAttack;
     }
 
+    private void OnDestroy()
+    {
+        UnregisterEvents();
+    }
+
     private Vector3 lastPosition;
+    private bool eventsRegistered = false;
 
     private void Start()
     {
         lastPosition = transform.position;
-        
+        RegisterEvents();
+        // ... (rest of start)
+
+        // ... (rest of start)
         // Robot gibi aynı anda yürümemeleri için rastgele offset VE hız değişimi
         if (animator != null)
         {
@@ -112,12 +125,23 @@ public class UnitAnimationController : NetworkBehaviour
         // Can azaldıysa = HASAR
         if (current < lastKnownHealth)
         {
-            if (animator != null && networkAnimator != null)
+            if (animator != null)
             {
                 // Canlıysa tepki ver
                 if (current > 0)
                 {
-                    networkAnimator.SetTrigger(hitParam);
+                    // KNOCKDOWN FIX: Yere düşmüş biri Hit titremesi yapmasın
+                    if (health != null && health.isKnockedDown)
+                    {
+                        // Hit animasyonunu iptal et
+                    }
+                    else
+                    {
+                        // SyncVar hook hem Server'da hem tüm Client'larda çalışır!
+                        // Bu yüzden NetworkAnimator'a gerek yok, direkt Animator'ı tetikle.
+                        // (NetworkAnimator server-owned objeler için client'tan çalışmıyordu!)
+                        animator.SetTrigger(hitParam);
+                    }
                 }
             }
         }
@@ -131,7 +155,17 @@ public class UnitAnimationController : NetworkBehaviour
         // Rastgele bir saldırı seç
         int randomIndex = Random.Range(0, attackParams.Length);
         string selectedTrigger = attackParams[randomIndex];
-        networkAnimator.SetTrigger(selectedTrigger);
+        
+        // Düşmanlar (Server tarafından yönetilir) direkt Base Animator'ı tetiklemeli
+        // Oyuncular (Client Authority) NetworkAnimator'ı tetiklemeli
+        if (isServer && !isOwned)
+        {
+            animator.SetTrigger(selectedTrigger);
+        }
+        else
+        {
+            networkAnimator.SetTrigger(selectedTrigger);
+        }
     }
 
     private void HandleDeath()

@@ -83,6 +83,13 @@ public class EnemyPatrol : NetworkBehaviour
         if (isWaiting)
         {
             waitTimer -= Time.deltaTime;
+            
+            // Animasyonu sürekli sıfırla (Bazen üstüne yazabiliyor)
+            if (animator != null)
+            {
+                animator.SetFloat("Speed", 0f);
+            }
+
             if (waitTimer <= 0f)
             {
                 isWaiting = false;

@@ -189,6 +189,18 @@ PrefabInstance:
       value: 7
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 909f0c4cc27daf14895060e75901b181, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 909f0c4cc27daf14895060e75901b181, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 909f0c4cc27daf14895060e75901b181, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 909f0c4cc27daf14895060e75901b181, type: 3}
       propertyPath: m_LocalPosition.x
       value: -91.07646
       objectReference: {fileID: 0}
@@ -542,6 +554,10 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+  attackTriggers:
+  - Attack
+  - Attack1
+  - Attack2
   damage: 15
   attackRange: 4
   attackCooldown: 1

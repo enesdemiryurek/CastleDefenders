@@ -44,12 +44,9 @@ public class BattleManager : MonoBehaviour
     // Target Engagement Sistemi
     public bool CanEngageEnemy(Transform enemy)
     {
-        if (enemy == null) return false;
-        
-        if (!enemyEngagementCount.ContainsKey(enemy))
-            enemyEngagementCount[enemy] = 0;
-        
-        return enemyEngagementCount[enemy] < maxEngagementsPerEnemy;
+        // KULLANICI İSTEĞİ: Hedefteki kişi sınırı tamamen KALDIRILDI.
+        // Herkes istediği hedefe dalabilir.
+        return true;
     }
 
     public void RegisterEnemyEngagement(Transform enemy)

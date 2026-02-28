@@ -36,7 +36,6 @@ public class ShieldSystem : NetworkBehaviour
         if (angle <= blockAngle / 2f)
         {
             // 2. Şans Kontrolü
-            // Blok şansı %100 değilse zar at
             if (Random.Range(0f, 100f) <= blockChance)
             {
                 // BLOK BAŞARILI!
@@ -62,11 +61,20 @@ public class ShieldSystem : NetworkBehaviour
 
     private void TriggerBlockAnimation()
     {
-        if (networkAnimator != null)
+        // Server tarafında lokal Animator'ı tetikle
+        if (animator != null)
         {
-            networkAnimator.SetTrigger(blockTrigger);
+            animator.SetTrigger(blockTrigger);
         }
-        else if (animator != null)
+        // Tüm clientlara da gönder
+        RpcPlayBlock();
+    }
+
+    [ClientRpc]
+    private void RpcPlayBlock()
+    {
+        if (animator == null) animator = GetComponentInChildren<Animator>();
+        if (animator != null)
         {
             animator.SetTrigger(blockTrigger);
         }

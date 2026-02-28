@@ -31,15 +31,21 @@ public class PlayerController : NetworkBehaviour
     private bool isDead = false;
     public bool InputEnabled { get; set; } = true; // Dışarıdan kontrol edilebilir (Command Mode için)
 
+    private int lastKnownHealth = -1;
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
+        
+        // Üstüne tırmanma önleme: stepOffset'i düşük tut ki askerlerin/düşmanların collider'ına basıp üstlerine çıkamasn
+        characterController.stepOffset = 0.2f;
         
         // Health eventine abone ol
         Health health = GetComponent<Health>();
         if (health != null)
         {
             health.OnDeath += OnDeathHandler;
+            health.EventHealthChanged += OnHealthChanged;
         }
     }
 
@@ -49,17 +55,59 @@ public class PlayerController : NetworkBehaviour
         if (health != null)
         {
             health.OnDeath -= OnDeathHandler;
+            health.EventHealthChanged -= OnHealthChanged;
         }
 
         if (BattleManager.Instance != null) BattleManager.Instance.UnregisterHero(transform);
+    }
+
+    private void OnHealthChanged(int current, int max)
+    {
+        // İlk açılışta health set edilirken Hit oynamasın
+        if (lastKnownHealth == -1)
+        {
+            lastKnownHealth = current;
+            return;
+        }
+
+        // Can azaldıysa = HASAR → Hit animasyonu
+        if (current < lastKnownHealth && current > 0 && !isDead)
+        {
+            // KALKAN AÇIKSA Hit animasyonu oynamasın!
+            PlayerShield shield = GetComponent<PlayerShield>();
+            if (shield != null && !shield.IsShieldBroken)
+            {
+                // Kalkan varsa ve sağlamsa, blok sırasında Hit oynamaz
+                // (PlayerShield zaten hasarı emiyor, vücuda gelmedi demek)
+                // Ama eğer hasar geliyorsa (arkadan saldırı vs.) o zaman Hit oynasın
+                // damageSource bilgisi burada yok ama amount > 0 ise hasar gelmiş demek
+                // SyncVar hook'u amount 0 olsa bile değişir mi? Hayır — amount 0 ise currentHealth değişmez.
+                // Yani buraya geldiyse HASAR GELMİŞ demek.
+            }
+
+            Animator anim = GetComponent<Animator>();
+            NetworkAnimator netAnim = GetComponent<NetworkAnimator>();
+            if (netAnim != null)
+            {
+                netAnim.SetTrigger("Hit");
+            }
+            else if (anim != null)
+            {
+                anim.SetTrigger("Hit");
+            }
+        }
+        lastKnownHealth = current;
     }
 
     private void OnDeathHandler()
     {
         isDead = true;
         
-        // Hareketi Sıfırla
-        // velocity = Vector3.zero; // Local velocity
+        // Hareketi Sıfırla — MAPTEN DÜŞME ÖNLEMESİ
+        velocity = Vector3.zero;
+        
+        // CharacterController'ı KAPATMA! Yoksa yerçekimi yok olur ve mapten düşer.
+        // Sadece input'u kapat (isDead = true zaten bunu yapıyor)
         
         // Animasyon Tetikle
         Animator anim = GetComponent<Animator>();
@@ -116,6 +164,9 @@ public class PlayerController : NetworkBehaviour
 
     private void HandleMovement()
     {
+        // ÖLÜYSEK HİÇ hareket etme — yerçekimi de yok!
+        if (isDead) return;
+        
         Animator anim = GetComponent<Animator>();
 
         // --- CLIMBING MOVEMENT ---
@@ -244,7 +295,7 @@ public class PlayerController : NetworkBehaviour
             anim.SetFloat("Speed", speed);
             anim.SetBool("IsBlocking", isBlockingInput); 
             anim.SetBool("Climb", isClimbing);
-            anim.SetBool("IsGrounded", isGrounded);
+            // IsGrounded kaldırıldı: Player animatöründe bu parametre yok, console'u spam ediyordu
         }
     }
 
@@ -282,6 +333,25 @@ public class PlayerController : NetworkBehaviour
                 {
                     gate.CmdInteract();
                 }
+            }
+        }
+    }
+
+    // ==================== ÜSTLERİNE TIRMANMA ÖNLEMESİ ====================
+    // Oyuncu askerlerin/düşmanların üstüne çıkmasın!
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        // Üzerinde mi duruyoruz? Normal yukarı bakıyorsa (y > 0.6 = tepede)
+        if (hit.normal.y > 0.6f && hit.normal.y < 0.95f)
+        {
+            // Bu bir birim mi? (Asker veya düşman)
+            if (hit.collider.GetComponentInParent<Health>() != null || 
+                hit.collider.GetComponentInParent<EnemyAI>() != null)
+            {
+                // Yandan it — birimin üstünden kaydır!
+                Vector3 pushDir = (transform.position - hit.point).normalized;
+                pushDir.y = 0; // Sadece yatay itme
+                characterController.Move(pushDir * 5f * Time.deltaTime);
             }
         }
     }

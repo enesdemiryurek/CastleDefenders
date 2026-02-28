@@ -8,10 +8,10 @@ public class CameraCulling : MonoBehaviour
 {
     [Header("Culling Settings")]
     [Tooltip("Kameranın göreceği maksimum mesafe")]
-    [SerializeField] private float maxRenderDistance = 500f;
+    [SerializeField] private float maxRenderDistance = 1000f;
     
     [Tooltip("Küçük objelerin (asker vs.) görüneceği mesafe")]
-    [SerializeField] private float smallObjectDistance = 200f;
+    [SerializeField] private float smallObjectDistance = 500f;
     
     private Camera cam;
 
@@ -20,6 +20,10 @@ public class CameraCulling : MonoBehaviour
         cam = GetComponent<Camera>();
         if (cam == null) cam = Camera.main;
         if (cam == null) return;
+
+        // Sahneden kalma eski küçük ayarları ez (Kasıtlı olarak yükselt/sınırla)
+        if (maxRenderDistance <= 500f) maxRenderDistance = 1000f;
+        if (smallObjectDistance <= 200f) smallObjectDistance = 500f;
 
         // Daha kısa görüş mesafesi = daha az render
         cam.farClipPlane = maxRenderDistance;
